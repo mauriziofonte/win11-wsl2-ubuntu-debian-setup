@@ -117,7 +117,7 @@ if ($changed) {
     $changed | ForEach-Object { Write-Host $_.Line -ForegroundColor Red }
     throw "the second run changed the lines above"
 }
-if (-not (Select-String -LiteralPath $second -Pattern "is already installed: it is kept as it is|è già installata")) {
+if (-not (Select-String -LiteralPath $second -Pattern "is already installed: it is kept as it is|\u00e8 gi\u00e0 installata")) {
     throw "the second run did not report the distribution as already installed"
 }
 Write-Host "ok - the second run changed nothing"
