@@ -1,5 +1,7 @@
 # LAMP/LAPP Stack on Windows 11 with WSL2, Debian 13 or Ubuntu 24.04/26.04, native systemd services and VS Code
 
+[![CI](https://github.com/mauriziofonte/win11-wsl2-ubuntu-debian-setup/actions/workflows/ci.yml/badge.svg)](https://github.com/mauriziofonte/win11-wsl2-ubuntu-debian-setup/actions/workflows/ci.yml)
+
 This project sets up a **LAMP/LAPP development stack** on Windows 11 (and Windows 10 1903+) inside **WSL2**, on **Debian 13** (recommended), **Ubuntu 24.04** or **Ubuntu 26.04**, with the stack running as _native systemd services_ instead of containers, and VS Code connected to it.
 
 In a hurry? Skip to the [Automated Install](#automated-install).
@@ -16,14 +18,22 @@ In a hurry? Skip to the [Automated Install](#automated-install).
 
 ## What will the stack be?
 
-> TL;DR: PHP 5.6 to **8.5** (CLI + FPM), Apache 2.4, **MariaDB 11.8 LTS**, **PostgreSQL 18**, Redis, Composer 2 and 1, Gash with `gash hte` for local sites, Node LTS via nvm.
+> TL;DR: PHP 5.6 to **8.5** (CLI + FPM), Apache 2.4, **MariaDB 11.8 LTS**, **PostgreSQL 18**, Redis, Composer 2 and 1, Gash with `gash hte` for local sites, Node LTS via nvm, and Bash with Gash as your shell (or Zsh, or plain Bash).
 
 1. PHP from [packages.sury.org](https://packages.sury.org/php/), on Debian and Ubuntu alike (it is absorbing `ppa:ondrej/php`, which an existing Ubuntu install may keep): every version from 5.6 to 8.5, with the usual extensions (intl, gd, imagick, mysql, pgsql, redis, memcached, xml, zip, ...)
-2. Local sites with **[`gash hte`](https://github.com/mauriziofonte/gash/blob/main/docs/hte.md)**: Apache and PHP-FPM run as your user, each site has its own PHP version, HTTPS with a self-signed certificate, HTTP/2, and the names go into `/etc/hosts` automatically
-3. **MariaDB 11.8 LTS** (EOL 13 February 2030), tuned for development, with a `default` user for your applications
+2. Local sites with **[`gash hte`](https://github.com/mauriziofonte/gash/blob/main/docs/hte/README.md)**: Apache and PHP-FPM run as your user, each site has its own PHP version, HTTPS with a self-signed certificate, HTTP/2, and the names go into `/etc/hosts` automatically
+3. **MariaDB 11.8 LTS** (maintained upstream until June 2028; on Debian 13 and Ubuntu 26.04 it is the distribution's own package), tuned for development, with a `default` user for your applications
 4. **PostgreSQL 18** from the official pgdg repository
 5. On WSL: systemd, `/tmp` on tmpfs, TRIM so that the virtual disk gives space back to Windows, no failing tty units
+6. Your shell: **Bash with [Gash](https://github.com/mauriziofonte/gash)** (recommended: PHP and Composer per version, WSL and Windows helpers, a git-aware prompt), or **Zsh with Oh My Zsh**, or the plain Bash of the distribution. See [Your shell](/docs/en/SETUP-EN.md#6-your-shell-gash-or-an-alternative)
 
+## Checked by CI, at every change and every week
+
+The guide states facts, and CI checks them on real systems instead of trusting them ([what exactly is checked](/tests/README.md)):
+
+* **Real WSL2 on Windows**: the Windows setup runs end to end on Debian 13, Ubuntu 24.04 and Ubuntu 26.04 inside WSL2 on a Windows runner. Then every component is checked against the guide, the guide's "first local site" commands run as written, Windows opens `https://shop.test/`, the distribution restarts and everything comes back, and a second run changes nothing.
+* **Plain machines**: the stack installer runs in containers with systemd, with other options (`--shell zsh`, `--shell bash`, `--no-gash`, a subset of PHP versions, high ports), after a port conflict from another network namespace (the situation of two WSL distributions), and the manual steps of the guide run as written.
+* **The documents themselves**: the options tables match the installers, the English and Italian guides match command for command, every link and anchor resolves, and every `gash` command the guide shows exists, with those flags, in the current Gash.
 ## Installation
 
 ### Automated Install
@@ -39,7 +49,7 @@ A new window opens: confirm the administrator (UAC) prompt, and the setup guides
 ```text
   ================================================================
    WSL2 + LAMP/LAPP development environment
-   Debian 13 / Ubuntu 24.04 / Ubuntu 26.04 on Windows  -  v2.0.0
+   Debian 13 / Ubuntu 24.04 / Ubuntu 26.04 on Windows  -  v2.1.0
   ================================================================
 
   [1/7] Checking this computer
@@ -65,7 +75,7 @@ A new window opens: confirm the administrator (UAC) prompt, and the setup guides
 | 2. Windows Subsystem for Linux | `wsl --install --no-distribution`. Windows restarts **only if it has to**; the setup then resumes by itself at your next login (a one-shot `RunOnce` entry, removed by Windows) |
 | 3. Updating WSL | `wsl --update`, WSL 2.0 or later required |
 | 4. Linux distribution | `wsl --install -d <distro>`: you choose your Linux username and password, then type `exit`. A distribution that is already installed is kept as it is. If you have other distributions, you are asked before the new one becomes the default |
-| 5. LAMP/LAPP stack | Runs the [stack installer](#the-stack-installer-also-runs-on-its-own) inside the distribution (it asks once for your sudo password), then restarts the distribution to apply its WSL settings |
+| 5. LAMP/LAPP stack | Runs the [stack installer](#the-stack-installer-also-runs-on-its-own) inside the distribution (it asks once for your sudo password), with Bash and Gash as your shell unless `-Shell` says otherwise, then restarts the distribution to apply its WSL settings |
 | 6. Docker Desktop | Optional, default **no** |
 | 7. Desktop shortcuts | A Linux terminal and the Linux home folder |
 
@@ -80,9 +90,13 @@ Options, with this form of the command:
 | Option | Effect |
 |---|---|
 | `-Distro Debian\|Ubuntu-24.04\|Ubuntu-26.04` | Skip the distribution question |
+| `-Shell gash\|zsh\|bash` | Your shell in Linux: Bash with Gash (default), Zsh with Oh My Zsh, or plain Bash |
+| `-Unattended` | Answer every question with its default and never wait for Enter (restart Windows yourself if WSL needed it); you still choose the Linux user of a new distribution |
 | `-DryRun` | Show every step without changing anything |
 | `-Force` | Forget the state of an interrupted run and start over (installed distributions are kept) |
 | `-SkipWindowsVersionCheck` | Allow Windows 10 1903 or later |
+
+Run directly, `win11.ps1` also takes `-StackScript <path>`: it runs that copy of `lamp-lapp-stack.sh` (one you reviewed) instead of downloading the released one.
 
 `wsl.mauriziofonte.it` redirects to the files of the latest [release](https://github.com/mauriziofonte/win11-wsl2-ubuntu-debian-setup/releases) of this repository (or of `main`, before the first release), so the whole chain runs one consistent version.
 
@@ -96,7 +110,7 @@ curl -fsSL https://wsl.mauriziofonte.it/lamp | bash
 
 The Debian image of WSL ships without `curl`: install it first with `sudo apt-get update && sudo apt-get install -y curl` (the Windows setup above does not need it, it downloads the script on the Windows side).
 
-It accepts options after `bash -s --` (`--yes`, `--php "8.4 7.4"`, `--pg 18`, `--no-gash`, `--hte-ports high`, ...: see `--help`). It **converges**: running it again changes only what differs, so after a failure you fix the cause and run it again. On a cloud VM, remember that the stack is configured for **local development**: everything listens on 127.0.0.1 only and nothing is hardened for the internet.
+It accepts options after `bash -s --` (`--yes`, `--php "8.4 7.4"`, `--pg 18`, `--shell zsh`, `--no-gash`, `--hte-ports high`, ...: see `--help` and [the options table](/docs/en/SETUP-EN.md#4-run-the-stack-installer)). It **converges**: running it again changes only what differs, so after a failure you fix the cause and run it again. On a cloud VM, remember that the stack is configured for **local development**: everything listens on 127.0.0.1 only and nothing is hardened for the internet.
 
 > All WSL2 distributions share one network: if another distribution already runs a LAMP stack, stop its services first. The installer detects the conflict and tells you.
 

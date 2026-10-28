@@ -4,16 +4,17 @@
 # Ubuntu 26.04 (resolute), on WSL2 or on a plain machine.
 #
 # Installs: PHP 5.6-8.5 (CLI + FPM, packages.sury.org), Apache 2.4, MariaDB 11.8 LTS,
-# PostgreSQL 18 (pgdg), Redis, Composer 2 + 1, Gash (+ `gash hte` for local sites), nvm + Node LTS.
+# PostgreSQL 18 (pgdg), Redis, Composer 2 + 1, Gash (+ `gash hte` for local sites), nvm + Node LTS,
+# and the interactive shell you choose: Bash with Gash (default), Zsh with Oh My Zsh, or the plain Bash.
 # On WSL it also applies the WSL base tuning: systemd, /tmp on tmpfs, TRIM, no tty getty.
 #
 # The script converges: every step checks the current state and changes only what differs,
 # so running it again is safe and is the way to resume after a failure.
 #
 # Author: Maurizio Fonte (https://www.mauriziofonte.it)
-# Version: 2.0.0
+# Version: 2.1.0
 # Release Date: 2023-09-04
-# Last Update: 2026-10-25
+# Last Update: 2026-10-28
 # License: MIT License
 #
 # Report issues: https://github.com/mauriziofonte/win11-wsl2-ubuntu-debian-setup/issues
@@ -22,11 +23,13 @@
 
     set -Eeuo pipefail
 
-    LLS_VERSION="2.0.0"
+    LLS_VERSION="2.1.0"
     LLS_PHP_ALL="5.6 7.0 7.1 7.2 7.3 7.4 8.0 8.1 8.2 8.3 8.4 8.5"
     LLS_PHP_MODS="cli fpm bcmath bz2 curl gd gmp igbinary imagick imap intl mbstring mcrypt memcached msgpack mysql opcache pgsql readline redis soap sqlite3 xml xsl zip"
     LLS_MARIADB_SERIES="11.8"
     LLS_NVM_VERSION="v0.40.8"
+    LLS_GASH_INSTALLER="https://raw.githubusercontent.com/mauriziofonte/gash/main/install.sh"
+    LLS_OMZ_INSTALLER="https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh"
     LLS_MANAGED="# Managed by lamp-lapp-stack.sh: re-running the installer rewrites this file."
 
     # Options (see lls_usage)
@@ -39,6 +42,7 @@
     OPT_WSL=auto
     OPT_TMP_SIZE="25%"
     OPT_HTE_PORTS="standard"
+    OPT_SHELL=""
 
     lls_echo() {
         local color="\e[1;97m"
@@ -62,7 +66,10 @@ Usage: lamp-lapp-stack.sh [options]
   -y, --yes            never prompt, take the defaults (needed without a terminal)
   --php "X.Y ..."      PHP versions to install (default: "$LLS_PHP_ALL")
   --pg N               PostgreSQL major from pgdg (default: $OPT_PG)
-  --no-gash            do not install Gash (implies --no-hte)
+  --shell S            interactive shell: gash (Bash with Gash, the default), zsh (Zsh with
+                       Oh My Zsh) or bash (the distribution's Bash, unchanged); with zsh and
+                       bash the gash command is still installed, for gash hte
+  --no-gash            do not install Gash (implies --no-hte and --shell bash)
   --no-hte             install Gash but do not run "gash hte install"
   --hte-ports P        ports for gash hte: standard (80/443) or high (default: standard)
   --no-node            do not install nvm and Node LTS
@@ -87,6 +94,7 @@ EOF
                 --no-wsl) OPT_WSL=0 ;;
                 --tmp-size) OPT_TMP_SIZE="${2-}"; shift ;;
                 --hte-ports) OPT_HTE_PORTS="${2-}"; shift ;;
+                --shell) OPT_SHELL="${2-}"; shift ;;
                 -h | --help) lls_usage; exit 0 ;;
                 *) lls_echo error "Unknown option: $1"; lls_usage; exit 1 ;;
             esac
@@ -104,6 +112,15 @@ EOF
         [[ "$OPT_PG" =~ ^[0-9]+$ ]] || { lls_echo error "--pg needs a major version number"; exit 1; }
         [[ "$OPT_TMP_SIZE" =~ ^[0-9]+[KMG%]?$ ]] || { lls_echo error "--tmp-size: use e.g. 6G or 25%"; exit 1; }
         [[ "$OPT_HTE_PORTS" =~ ^(standard|high)$ ]] || { lls_echo error "--hte-ports: standard or high"; exit 1; }
+        if [ -z "$OPT_SHELL" ]; then
+            OPT_SHELL=gash
+            [ "$OPT_GASH" -eq 1 ] || OPT_SHELL=bash
+        fi
+        [[ "$OPT_SHELL" =~ ^(gash|zsh|bash)$ ]] || { lls_echo error "--shell: gash, zsh or bash"; exit 1; }
+        if [ "$OPT_SHELL" = gash ] && [ "$OPT_GASH" -eq 0 ]; then
+            lls_echo error "--shell gash and --no-gash exclude each other"
+            exit 1
+        fi
     }
 
     # Yes/no question; the default wins with --yes or without a terminal.
@@ -194,7 +211,7 @@ EOF
         fi
 
         lls_echo "System: ${PRETTY_NAME-} ($LLS_CODENAME), user: $USER, WSL tuning: $([ "$OPT_WSL" -eq 1 ] && echo yes || echo no)"
-        lls_echo "PHP: $OPT_PHP | MariaDB $LLS_MARIADB_SERIES | PostgreSQL $OPT_PG"
+        lls_echo "PHP: $OPT_PHP | MariaDB $LLS_MARIADB_SERIES | PostgreSQL $OPT_PG | shell: $OPT_SHELL"
         lls_echo warning "For development machines only: do not run this on a production server."
 
         if ! lls_ask "Continue?" y; then
@@ -360,6 +377,7 @@ EOF
 
         # The newest installed PHP is the default "php".
         local newest
+        # shellcheck disable=SC2086
         newest="$(printf '%s\n' $OPT_PHP | sort -V | tail -1)"
         local alt
         for alt in php phar phar.phar; do
@@ -506,9 +524,22 @@ EOF
         [ "$OPT_GASH" -eq 1 ] || return 0
         lls_echo step "== Gash"
         if [ ! -d "$HOME/.gash" ]; then
-            wget -qO- https://raw.githubusercontent.com/mauriziofonte/gash/refs/heads/main/install.sh | bash -s -- --assume-yes --quiet
+            if [ "$OPT_SHELL" = gash ]; then
+                wget -qO- "$LLS_GASH_INSTALLER" | bash -s -- --assume-yes --quiet
+            else
+                # Gash as a command only: its installer leaves every shell profile alone.
+                wget -qO- "$LLS_GASH_INSTALLER" | PROFILE=/dev/null bash -s -- --assume-yes --quiet
+            fi
         else
-            lls_echo log "  already installed: update it with Gash's own updater"
+            lls_echo log "  already installed: update it with \"gash update\""
+        fi
+        if [ "$OPT_SHELL" != gash ] && [ -x "$HOME/.gash/bin/gash" ]; then
+            # The launcher on PATH, so that "gash hte ..." works from any shell.
+            mkdir -p "$HOME/.local/bin"
+            if [ "$(readlink "$HOME/.local/bin/gash" 2>/dev/null)" != "$HOME/.gash/bin/gash" ]; then
+                ln -sfn "$HOME/.gash/bin/gash" "$HOME/.local/bin/gash"
+                lls_echo log "  linked ~/.local/bin/gash"
+            fi
         fi
 
         [ "$OPT_HTE" -eq 1 ] || return 0
@@ -549,6 +580,55 @@ EOF
         lls_echo log "  node $(nvm version default 2>/dev/null || nvm current)"
     }
 
+    # Writes stdin as a block between markers at the end of a file of the user, replacing the
+    # previous block and keeping every other line.
+    lls_user_block() {
+        local file="$1" begin="# >>> lamp-lapp-stack >>>" end="# <<< lamp-lapp-stack <<<" tmp
+        tmp="$(mktemp)"
+        {
+            if [ -f "$file" ]; then
+                awk -v b="$begin" -v e="$end" '$0 == b { skip = 1; next } $0 == e { skip = 0; next } !skip' "$file"
+            fi
+            echo "$begin"
+            echo "# Managed by lamp-lapp-stack.sh: re-running the installer rewrites this block."
+            cat
+            echo "$end"
+        } >"$tmp"
+        if cmp -s "$tmp" "$file"; then
+            rm -f "$tmp"
+            return 0
+        fi
+        cat "$tmp" >"$file"
+        rm -f "$tmp"
+        lls_echo log "  wrote the lamp-lapp-stack block of $file"
+    }
+
+    lls_shell() {
+        [ "$OPT_SHELL" = zsh ] || return 0
+        lls_echo step "== Zsh + Oh My Zsh"
+        lls_apt install zsh
+        if [ ! -d "$HOME/.oh-my-zsh" ]; then
+            local tmp
+            tmp="$(mktemp)"
+            curl -fsSLo "$tmp" "$LLS_OMZ_INSTALLER"
+            # --unattended: it changes no login shell and starts no zsh (the login shell is set below).
+            sh "$tmp" --unattended
+            rm -f "$tmp"
+        fi
+        # Zsh reads neither ~/.bashrc nor ~/.profile: nvm and ~/.local/bin (the gash launcher) go here.
+        lls_user_block "$HOME/.zshrc" <<'ZSHRC'
+case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) export PATH="$HOME/.local/bin:$PATH" ;; esac
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+ZSHRC
+        local zsh_path
+        zsh_path="$(command -v zsh)"
+        if [ "$(getent passwd "$USER" | cut -d: -f7)" != "$zsh_path" ]; then
+            sudo chsh -s "$zsh_path" "$USER"
+            lls_echo log "  login shell of $USER: $zsh_path"
+        fi
+    }
+
     lls_summary() {
         # "sudo -u postgres" opens a user session whose /run/user cleanup fails on WSL: harmless, but it marks the system "degraded".
         sudo systemctl reset-failed 'user-runtime-dir@*.service' 2>/dev/null || true
@@ -558,6 +638,11 @@ EOF
         if [ "$OPT_HTE" -eq 1 ]; then
             lls_echo "Local sites: gash hte site create --domain example.test --docroot public"
         fi
+        case "$OPT_SHELL" in
+            gash) lls_echo "Shell: Bash with Gash. Open a new terminal, then run: gash" ;;
+            zsh) lls_echo "Shell: Zsh with Oh My Zsh. Open a new terminal." ;;
+            bash) lls_echo "Shell: the distribution's Bash, unchanged" ;;
+        esac
         lls_echo "SSH key: none created. See the guide, \"Create your SSH key\"."
         if [ "${LLS_NEEDS_WSL_RESTART-0}" -eq 1 ]; then
             lls_echo warning "WSL settings changed: from Windows run  wsl --terminate ${WSL_DISTRO_NAME:-<distro>}  then reopen the terminal."
@@ -584,6 +669,7 @@ EOF
         lls_composer
         lls_gash
         lls_node
+        lls_shell
         lls_summary
     }
 

@@ -12,9 +12,11 @@
 # License: MIT License
 
 # No validation attributes here: under "irm | iex" this block runs as plain variable declarations
-# in the caller's scope, and a ValidateSet would reject the empty default. win11.ps1 validates -Distro.
+# in the caller's scope, and a ValidateSet would reject the empty default. win11.ps1 validates -Distro and -Shell.
 param (
     [String]$Distro = "",
+    [String]$Shell = "",
+    [Switch]$Unattended,
     [Switch]$DryRun,
     [Switch]$SkipWindowsVersionCheck,
     [Switch]$Force
@@ -55,6 +57,8 @@ catch {
 
 $arguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$target`"")
 if ($Distro) { $arguments += @("-Distro", $Distro) }
+if ($Shell) { $arguments += @("-Shell", $Shell) }
+if ($Unattended) { $arguments += "-Unattended" }
 if ($DryRun) { $arguments += "-DryRun" }
 if ($SkipWindowsVersionCheck) { $arguments += "-SkipWindowsVersionCheck" }
 if ($Force) { $arguments += "-Force" }

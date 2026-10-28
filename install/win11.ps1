@@ -1,13 +1,14 @@
 ﻿# WSL2 + Debian 13 / Ubuntu 24.04 / Ubuntu 26.04 setup for Windows 11 (and Windows 10 1903+ with -SkipWindowsVersionCheck)
 #
 # Author: Maurizio Fonte (https://www.mauriziofonte.it)
-# Version: 2.0.0
+# Version: 2.1.0
 # Release Date: 2023-09-04
-# Last Update: 2026-10-26
+# Last Update: 2026-10-28
 # License: MIT License
 #
 # Usually started by the bootstrap: irm https://wsl.mauriziofonte.it | iex
-# Direct use: .\win11.ps1 [-Distro Debian|Ubuntu-24.04|Ubuntu-26.04] [-DryRun] [-SkipWindowsVersionCheck] [-Force]
+# Direct use: .\win11.ps1 [-Distro Debian|Ubuntu-24.04|Ubuntu-26.04] [-Shell gash|zsh|bash] [-Unattended]
+#                         [-StackScript <path>] [-DryRun] [-SkipWindowsVersionCheck] [-Force]
 #
 # Flow: checks -> WSL (reboot only when Windows needs it, then resume by itself) -> WSL update -> distribution
 # -> LAMP/LAPP stack -> Docker Desktop (optional) -> Desktop shortcuts -> summary.
@@ -15,16 +16,22 @@
 #
 # Report issues: https://github.com/mauriziofonte/win11-wsl2-ubuntu-debian-setup/issues
 
-# -Distro is validated below, not with [ValidateSet]: the attribute would stay on the variable and reject
-# the empty value read back from the registry.
+# -Distro and -Shell are validated below, not with [ValidateSet]: the attribute would stay on the variable
+# and reject the empty value read back from the registry.
+# -Unattended answers every question with its default and never waits for Enter; creating the Linux user of a
+# new distribution still needs you. -StackScript runs a local copy of lamp-lapp-stack.sh instead of the
+# released one (a copy you reviewed, or the one under test in CI).
 param (
     [String]$Distro = "",
+    [String]$Shell = "",
+    [Switch]$Unattended,
+    [String]$StackScript = "",
     [Switch]$DryRun,
     [Switch]$SkipWindowsVersionCheck,
     [Switch]$Force
 )
 
-$scriptVersion = "2.0.0"
+$scriptVersion = "2.1.0"
 $installHost = "https://wsl.mauriziofonte.it"
 $repoRawBase = "https://raw.githubusercontent.com/mauriziofonte/win11-wsl2-ubuntu-debian-setup/main"
 $registryPath = "HKCU:\Software\WSL2Setup"
@@ -32,6 +39,7 @@ $runOncePath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce"
 $workDir = Join-Path $env:LOCALAPPDATA "WSL2Setup"
 $totalSteps = 7
 $supportedDistros = @("Debian", "Ubuntu-24.04", "Ubuntu-26.04")
+$supportedShells = @("gash", "zsh", "bash")
 
 # wsl.exe writes UTF-16 to a pipe unless told otherwise: PowerShell 5.1 would read it with NUL bytes between letters.
 # With WSL_UTF8 it writes UTF-8, so the console must decode native output (and print ours) as UTF-8 too.
@@ -51,6 +59,8 @@ $messages = @{
         "press_enter_exit" = "Press Enter to close this window."
         "press_enter_continue" = "Press Enter to continue."
         "yes_no_invalid" = "Please answer y (yes) or n (no)."
+        "auto_yes" = "yes (unattended)"
+        "auto_no" = "no (unattended)"
         "step_checks" = "Checking this computer"
         "step_wsl" = "Windows Subsystem for Linux"
         "step_update" = "Updating WSL"
@@ -75,6 +85,7 @@ $messages = @{
         "wsl_installed" = "WSL installed"
         "reboot_needed" = "Windows must restart to finish enabling WSL. The setup continues by itself after you log in again."
         "reboot_ask" = "Save your work, then press Enter to restart now."
+        "reboot_later" = "Restart Windows when you are ready: the setup continues by itself at your next login."
         "resumed" = "Resuming the setup after the restart."
         "wsl_version" = "WSL {0}"
         "wsl_version_ko" = "WSL {0} is too old (2.0 or later is required): run 'wsl --update', then run this setup again."
@@ -91,6 +102,7 @@ $messages = @{
         "ask_stack" = "Install the LAMP/LAPP stack (PHP 5.6-8.5, Apache, MariaDB, PostgreSQL, Redis, Gash) in {0}?"
         "stack_info" = "This takes a while and prints a lot of output. Linux asks once for your sudo password."
         "stack_download_ko" = "Cannot download the stack installer: {0}"
+        "stack_local" = "Stack installer: local copy {0}"
         "stack_ok" = "LAMP/LAPP stack installed"
         "stack_ko" = "The stack installer stopped with an error (exit code {0}). Its log is in ~/.local/state/lamp-lapp-stack/ inside {1}. Fix the cause and run this setup again: completed steps are skipped."
         "stack_skipped" = "Skipped"
@@ -117,6 +129,8 @@ $messages = @{
         "press_enter_exit" = "Premi Invio per chiudere questa finestra."
         "press_enter_continue" = "Premi Invio per continuare."
         "yes_no_invalid" = "Rispondi s (sì) oppure n (no)."
+        "auto_yes" = "sì (automatico)"
+        "auto_no" = "no (automatico)"
         "step_checks" = "Controllo del computer"
         "step_wsl" = "Sottosistema Windows per Linux"
         "step_update" = "Aggiornamento di WSL"
@@ -141,6 +155,7 @@ $messages = @{
         "wsl_installed" = "WSL installato"
         "reboot_needed" = "Windows deve riavviarsi per completare l'attivazione di WSL. L'installazione riprende da sola dopo che avrai effettuato di nuovo l'accesso."
         "reboot_ask" = "Salva il tuo lavoro, poi premi Invio per riavviare adesso."
+        "reboot_later" = "Riavvia Windows quando sei pronto: l'installazione riprende da sola al prossimo accesso."
         "resumed" = "L'installazione riprende dopo il riavvio."
         "wsl_version" = "WSL {0}"
         "wsl_version_ko" = "WSL {0} è troppo vecchio (serve la 2.0 o successiva): esegui 'wsl --update', poi esegui di nuovo questa installazione."
@@ -157,6 +172,7 @@ $messages = @{
         "ask_stack" = "Installare lo stack LAMP/LAPP (PHP 5.6-8.5, Apache, MariaDB, PostgreSQL, Redis, Gash) in {0}?"
         "stack_info" = "Richiede un po' di tempo e produce molto output. Linux chiede una sola volta la password di sudo."
         "stack_download_ko" = "Impossibile scaricare l'installer dello stack: {0}"
+        "stack_local" = "Installer dello stack: copia locale {0}"
         "stack_ok" = "Stack LAMP/LAPP installato"
         "stack_ko" = "L'installer dello stack si è fermato con un errore (codice di uscita {0}). Il log è in ~/.local/state/lamp-lapp-stack/ dentro {1}. Risolvi la causa ed esegui di nuovo questa installazione: i passi già completati vengono saltati."
         "stack_skipped" = "Saltato"
@@ -210,9 +226,11 @@ function Stop-Setup {
     Write-Host ""
     Write-Host "        [FAIL] " -ForegroundColor Red -NoNewline
     Write-Host (Msg "failed" @($Text)) -ForegroundColor Red
-    Write-Host ""
-    Write-Host "  $(Msg 'press_enter_exit')" -ForegroundColor Gray
-    Read-Host | Out-Null
+    if (-not $Unattended) {
+        Write-Host ""
+        Write-Host "  $(Msg 'press_enter_exit')" -ForegroundColor Gray
+        Read-Host | Out-Null
+    }
     Stop-Transcript -ErrorAction SilentlyContinue | Out-Null
     exit 1
 }
@@ -220,6 +238,11 @@ function Stop-Setup {
 function Read-YesNo {
     param ([Parameter(Mandatory = $true)] [String]$Question, [Bool]$Default = $true)
     $hint = if ($language -eq "it") { if ($Default) { "(S/n)" } else { "(s/N)" } } else { if ($Default) { "(Y/n)" } else { "(y/N)" } }
+    if ($Unattended) {
+        Write-Host "        [ ?? ] " -ForegroundColor Magenta -NoNewline
+        Write-Host "$Question $hint $(if ($Default) { Msg 'auto_yes' } else { Msg 'auto_no' })"
+        return $Default
+    }
     while ($true) {
         Write-Host "        [ ?? ] " -ForegroundColor Magenta -NoNewline
         Write-Host "$Question $hint " -NoNewline
@@ -240,6 +263,9 @@ function Get-SelfArguments {
     param ([String]$ChosenDistro)
     $list = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"")
     if ($ChosenDistro) { $list += @("-Distro", $ChosenDistro) }
+    if ($Shell) { $list += @("-Shell", $Shell) }
+    if ($Unattended) { $list += "-Unattended" }
+    if ($StackScript) { $list += @("-StackScript", "`"$StackScript`"") }
     if ($DryRun) { $list += "-DryRun" }
     if ($SkipWindowsVersionCheck) { $list += "-SkipWindowsVersionCheck" }
     return $list
@@ -335,6 +361,7 @@ while ($true) {
         break
     }
     catch {
+        if ($Unattended) { Stop-Setup "https://github.com: $($_.Exception.Message)" }
         Write-Warn (Msg "internet_ko")
         Read-Host | Out-Null
     }
@@ -347,7 +374,11 @@ Write-Ok (Msg "windows_ok" @($build))
 
 # The distribution chosen on the first run is kept in the registry for the resume after reboot.
 if ($Distro -and $supportedDistros -notcontains $Distro) { Stop-Setup "-Distro: $($supportedDistros -join ', ')" }
+if ($Shell -and $supportedShells -notcontains $Shell) { Stop-Setup "-Shell: $($supportedShells -join ', ')" }
+if ($StackScript -and -not (Test-Path -LiteralPath $StackScript -PathType Leaf)) { Stop-Setup "-StackScript: $StackScript" }
+if ($StackScript) { $StackScript = (Resolve-Path -LiteralPath $StackScript).Path }
 if (-not $Distro) { $Distro = [String](Get-SetupValue -Key "Distro") }
+if (-not $Distro -and $Unattended) { $Distro = "Debian" }
 if (-not $Distro) {
     Write-Host ""
     Write-Host "        $(Msg 'ask_distro')" -ForegroundColor White
@@ -383,6 +414,12 @@ else {
         # RunOnce: Windows deletes the entry before running it, at the next logon of this user.
         $resume = "powershell.exe " + ((Get-SelfArguments -ChosenDistro $Distro) -join " ")
         Set-ItemProperty -Path $runOncePath -Name "WSL2Setup" -Value $resume
+        if ($Unattended) {
+            # Never restart a computer nobody is watching: the RunOnce entry resumes at the next login.
+            Write-Warn (Msg "reboot_later")
+            Stop-Transcript | Out-Null
+            exit 3010
+        }
         Write-Host ""
         Write-Host "        $(Msg 'reboot_ask')" -ForegroundColor White
         Read-Host | Out-Null
@@ -454,18 +491,28 @@ Write-Step 5 "step_stack"
 if (Read-YesNo -Question (Msg "ask_stack" @($Distro))) {
     Write-Info (Msg "stack_info")
     if ($DryRun) {
-        Write-Info "$installHost/lamp -> bash lamp-lapp-stack.sh --yes"
+        $dryShell = if ($Shell) { " --shell $Shell" } else { "" }
+        $dryFrom = if ($StackScript) { $StackScript } else { "$installHost/lamp" }
+        Write-Info "$dryFrom -> bash lamp-lapp-stack.sh --yes$dryShell"
     }
     else {
         # Downloaded on the Windows side: the Debian image has neither curl nor wget.
-        $stackScript = Join-Path $workDir "lamp-lapp-stack.sh"
-        try { Invoke-Download -Url "$installHost/lamp" -Output $stackScript }
-        catch { Stop-Setup (Msg "stack_download_ko" @($_.Exception.Message)) }
+        $stackCopy = Join-Path $workDir "lamp-lapp-stack.sh"
+        if ($StackScript) {
+            Copy-Item -LiteralPath $StackScript -Destination $stackCopy -Force
+            Write-Info (Msg "stack_local" @($StackScript))
+        }
+        else {
+            try { Invoke-Download -Url "$installHost/lamp" -Output $stackCopy }
+            catch { Stop-Setup (Msg "stack_download_ko" @($_.Exception.Message)) }
+        }
 
-        # Two plain calls instead of an inline "bash -c": PowerShell 5.1 does not escape quotes inside native arguments.
-        $linuxScript = ((wsl.exe -d $Distro --exec wslpath -u $stackScript) -join "").Trim()
+        # Plain calls instead of an inline "bash -c": PowerShell 5.1 does not escape quotes inside native arguments.
+        $linuxScript = ((wsl.exe -d $Distro --exec wslpath -u $stackCopy) -join "").Trim()
+        $stackArguments = @("--yes")
+        if ($Shell) { $stackArguments += @("--shell", $Shell) }
         Write-Host ""
-        wsl.exe -d $Distro --cd "~" --exec bash $linuxScript --yes
+        wsl.exe -d $Distro --cd "~" --exec bash $linuxScript @stackArguments
         $stackExit = $LASTEXITCODE
         Write-Host ""
         if ($stackExit -ne 0) { Stop-Setup (Msg "stack_ko" @($stackExit, $Distro)) }
@@ -542,7 +589,9 @@ Write-Host "   $(Msg 'done_hosts')"
 Write-Host "   $(Msg 'done_guide')" -ForegroundColor Gray
 Write-Host "   $(Msg 'log_file' @($logFile))" -ForegroundColor DarkGray
 Write-Host ""
-Write-Host "  $(Msg 'press_enter_exit')" -ForegroundColor Gray
 Stop-Transcript | Out-Null
-Read-Host | Out-Null
+if (-not $Unattended) {
+    Write-Host "  $(Msg 'press_enter_exit')" -ForegroundColor Gray
+    Read-Host | Out-Null
+}
 exit 0
