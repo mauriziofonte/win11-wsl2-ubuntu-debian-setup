@@ -205,7 +205,7 @@ Gli utenti anonimi e il database `test` vengono rimossi.
 gash hte install --yes --ports standard
 ```
 
-Questo comando usa `sudo` una sola volta per: installare un piccolo helper per `/etc/hosts`, permettere al tuo utente di usare le porte 80 e 443 (`net.ipv4.ip_unprivileged_port_start = 80`), fermare e disabilitare l'Apache di sistema, attivare una unit systemd **utente** (`gash-hte.service`) che avvia lo stack al boot. Dato che `gash hte` usa i propri master PHP-FPM, l'installer poi disabilita i servizi `phpX.Y-fpm` di sistema: occuperebbero solo memoria (circa 70 MB per versione).
+Questo comando usa `sudo` una sola volta per: installare un piccolo helper per `/etc/hosts`, permettere al tuo utente di usare le porte 80 e 443 (`net.ipv4.ip_unprivileged_port_start = 80`), fermare e disabilitare l'Apache di sistema, attivare una unit systemd **utente** (`gash-hte.service`) che avvia lo stack al boot. Dato che `gash hte` usa i propri master Apache e PHP-FPM, l'installer poi disabilita i servizi `phpX.Y-fpm` di sistema, e anche l'Apache di sistema se hai scelto le porte alte (lì `gash hte` non lo tocca): occuperebbero solo memoria (circa 70 MB per versione di PHP).
 
 Con `--shell gash` (il predefinito) le shell Bash interattive caricano Gash, che definisce anche `php85` ... `php56`, `composer85` ... `composer56`, `1composer72` ... `1composer56` e `composer-self-update`. Con `--shell zsh` o `--shell bash` Gash non tocca la tua shell e viene installato solo il comando `gash` (in `~/.local/bin`), quindi `gash hte` funziona allo stesso modo.
 

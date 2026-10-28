@@ -61,7 +61,7 @@ jobs:
         shell: pwsh
         run: |
           Install-Module PSScriptAnalyzer -RequiredVersion $env:PSSCRIPTANALYZER_VERSION -Scope CurrentUser -Force
-          $results = @(Invoke-ScriptAnalyzer -Path install, tests/wsl -Recurse -Settings tests/PSScriptAnalyzerSettings.psd1)
+          $results = @(foreach ($dir in @("install", "tests/wsl")) { Invoke-ScriptAnalyzer -Path $dir -Recurse -Settings tests/PSScriptAnalyzerSettings.psd1 })
           $results | Format-Table -AutoSize -Wrap RuleName, Severity, ScriptName, Line, Message
           if ($results.Count -gt 0) { throw "PSScriptAnalyzer: $($results.Count) finding(s)" }
       - name: Parse in Windows PowerShell 5.1

@@ -554,12 +554,15 @@ EOF
         sudo a2dissite -q 000-default >/dev/null 2>&1 || true
         "$gash_bin" hte install --yes --ports "$OPT_HTE_PORTS"
 
-        # gash hte runs its own PHP-FPM masters: the system ones would only hold memory (~70 MB per version).
-        local v
-        for v in $OPT_PHP; do
-            if systemctl is-enabled --quiet "php$v-fpm.service" 2>/dev/null || systemctl is-active --quiet "php$v-fpm.service"; then
-                sudo systemctl disable --now --quiet "php$v-fpm.service"
-                lls_echo log "  disabled the system php$v-fpm (gash hte runs its own)"
+        # gash hte runs its own Apache and PHP-FPM masters: the system ones would only hold memory
+        # (~70 MB per PHP version). On ports 80/443 gash hte stops the system Apache itself; on the
+        # high ports it leaves it alone, so the installer does it here.
+        local v unit units="apache2"
+        for v in $OPT_PHP; do units="$units php$v-fpm"; done
+        for unit in $units; do
+            if systemctl is-enabled --quiet "$unit.service" 2>/dev/null || systemctl is-active --quiet "$unit.service"; then
+                sudo systemctl disable --now --quiet "$unit.service"
+                lls_echo log "  disabled the system $unit (gash hte runs its own)"
             fi
         done
     }

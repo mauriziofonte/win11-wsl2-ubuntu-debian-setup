@@ -84,16 +84,20 @@ check() {
     fi
 }
 
+# The stdout of a command; its stderr goes to $ERR, shown only when the check fails.
+ERR="$(mktemp)"
+trap 'rm -f "$ERR"' EXIT
+
 # check_eq "description" expected command...: the command's output, trimmed, must equal expected.
 check_eq() {
     local desc="$1" want="$2" got
     shift 2
-    got="$("$@" 2>&1)"
+    got="$("$@" 2>"$ERR")"
     got="${got%"${got##*[![:space:]]}"}"
     if [ "$got" = "$want" ]; then
         ok "$desc"
     else
-        not_ok "$desc" "expected: $want"$'\n'"got:      $got"
+        not_ok "$desc" "expected: $want"$'\n'"got:      $got"$'\n'"$(cat "$ERR")"
     fi
 }
 
@@ -101,11 +105,11 @@ check_eq() {
 check_match() {
     local desc="$1" re="$2" got
     shift 2
-    got="$("$@" 2>&1)"
+    got="$("$@" 2>"$ERR")"
     if printf '%s' "$got" | grep -Eq -- "$re"; then
         ok "$desc"
     else
-        not_ok "$desc" "expected to match: $re"$'\n'"got: $got"
+        not_ok "$desc" "expected to match: $re"$'\n'"got: $got"$'\n'"$(cat "$ERR")"
     fi
 }
 
@@ -214,7 +218,7 @@ esac
 
 # ----------------------------------------------------------------------------------------------
 section "Apache"
-check_match "Apache 2.4 is installed" 'Apache/2\.4\.' /usr/sbin/apache2ctl -v
+check_match "Apache 2.4 is installed" 'Apache/2\.4\.' sudo /usr/sbin/apache2ctl -v
 if [ "$EXPECT_HTE" -eq 1 ]; then
     check_match "the system Apache is stopped and disabled, gash hte serves the sites (4.7)" \
         '^(disabled|masked) (inactive|failed)' unit_state apache2.service

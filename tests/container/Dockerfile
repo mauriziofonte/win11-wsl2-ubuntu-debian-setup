@@ -1,5 +1,6 @@
 # A "plain machine" for lamp-lapp-stack.sh: the distribution image with systemd as PID 1, a user "dev"
 # with passwordless sudo (the installer asks once for the sudo password; CI has nobody to type it).
+# The image's policy-rc.d, which stops packages from starting their services, goes: a real system has none.
 # Units that touch the kernel or devices are masked: the container runs --privileged on the CI VM.
 # systemd-sysctl applies only the low-port key that gash hte installs, so its boot behaviour is real
 # without changing the VM's kernel settings.
@@ -10,6 +11,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends systemd systemd-sysv dbus dbus-user-session libpam-systemd \
         sudo iproute2 procps ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
+    && rm -f /usr/sbin/policy-rc.d \
     && systemctl mask systemd-udevd.service systemd-udev-trigger.service systemd-modules-load.service \
         systemd-remount-fs.service systemd-firstboot.service systemd-timesyncd.service getty.target \
         console-getty.service systemd-binfmt.service proc-sys-fs-binfmt_misc.automount \
