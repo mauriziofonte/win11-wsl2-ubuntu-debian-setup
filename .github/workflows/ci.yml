@@ -88,6 +88,8 @@ jobs:
           if ($LASTEXITCODE -ne 1) { throw "-Distro Fedora: expected exit status 1, got $LASTEXITCODE" }
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File install/win11.ps1 -DryRun -Unattended -Shell fish | Out-Host
           if ($LASTEXITCODE -ne 1) { throw "-Shell fish: expected exit status 1, got $LASTEXITCODE" }
+          # The step would otherwise end with the expected status 1 of the last call.
+          exit 0
 
   wsl:
     name: WSL2 (${{ matrix.distro }})
