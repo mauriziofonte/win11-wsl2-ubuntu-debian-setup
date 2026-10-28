@@ -20,7 +20,7 @@ On a Windows runner, for each distribution:
 3. The two Desktop shortcuts exist, and Windows opens the home folder they point to.
 4. [verify-stack.sh](verify-stack.sh) checks the result (the list below), and runs the guide's "Your first local site" commands exactly as written.
 5. The lines of `gash hte hosts windows` go in the Windows hosts file, and `curl.exe` on Windows opens `https://shop.test/`: WSL's localhost forwarding and the hosts lines work together.
-6. `wsl --terminate`, then the checks again: services, the local site, `/tmp` on tmpfs and the hosts names come back at boot.
+6. `wsl --terminate`, then the checks again: services, the local site, `/tmp` on tmpfs and the hosts names come back at boot, and `gash hte hosts windows` has nothing left to add.
 7. `win11.ps1` again: it reports the distribution as already installed, and the stack installer changes nothing.
 
 ## The plain-machine job

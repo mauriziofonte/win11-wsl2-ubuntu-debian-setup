@@ -387,7 +387,13 @@ if [ "$EXPECT_HTE" -eq 1 ]; then
 
     if [ "$ON_WSL" -eq 1 ]; then
         section "Gash on WSL (5, 7)"
-        check_match "gash hte hosts windows prints the line for shop.test" 'shop\.test' "$GASH" hte hosts windows
+        if [ "$PHASE" = install ]; then
+            check_match "gash hte hosts windows prints the line for shop.test" 'shop\.test' "$GASH" hte hosts windows
+        else
+            # The test added that line to the Windows hosts file: only the names Windows cannot resolve are printed.
+            check "gash hte hosts windows has nothing left to add for shop.test" \
+                bash -c 'out="$("$1" hte hosts windows)" || exit 1; printf "%s\n" "$out"; ! grep -q "shop\.test" <<<"$out"' _ "$GASH"
+        fi
         check "gash wsl info" "$GASH" wsl info
         check "gash win info reads Windows through interop" "$GASH" win info
         check_match "gash win fix hosts-add shows the elevated command (--dry-run)" 'shop\.test' \
