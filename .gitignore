@@ -1,1 +1,2 @@
-.sink/
+.sink/docs/tapes/node_modules/
+*.cast

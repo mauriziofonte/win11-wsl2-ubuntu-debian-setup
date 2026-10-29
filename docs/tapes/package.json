@@ -1,0 +1,12 @@
+{
+  "name": "win11-wsl2-setup-tapes",
+  "private": true,
+  "description": "Plays the tapes of this folder in a real terminal (record.mjs)",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "@xterm/addon-serialize": "0.14.0",
+    "@xterm/headless": "6.0.0",
+    "node-pty": "1.1.0"
+  }
+}

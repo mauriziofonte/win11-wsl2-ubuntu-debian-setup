@@ -1,0 +1,5 @@
+# LF everywhere, also in a checkout on Windows: the shell scripts and the guides are read inside WSL.
+* text=auto eol=lf
+*.ico binary
+*.png binary
+*.gif binary

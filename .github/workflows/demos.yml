@@ -1,0 +1,142 @@
+# Records the GIFs of the guide (docs/tapes/*.tape): a real, interactive run of the Windows setup on a
+# real WSL2, on a Windows runner. docs/tapes/record.mjs plays each tape on ConPTY and saves an asciicast;
+# agg turns the casts into GIFs on Linux. A push to a branch other than main that changes a tape records
+# them and commits the GIFs to that branch, so they reach main with the pull request that changed the
+# tapes. Started by hand, it commits them only with "commit" checked. The GIFs are also uploaded as an
+# artifact.
+name: Demos
+
+on:
+  push:
+    branches-ignore: [main]
+    paths:
+      - "docs/tapes/**"
+      - ".github/workflows/demos.yml"
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: Commit the GIFs to the branch this runs on
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: demos-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AGG_VERSION: v1.5.0
+  AGG_SHA256: 59673469d625df6f55c72159c84ffbb7af1348ac379d0e79db43f4b80fb986a3
+
+jobs:
+  record:
+    name: Play the tapes on Windows
+    runs-on: windows-2025
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: The recorder's packages (versions locked in package-lock.json)
+        shell: pwsh
+        run: npm ci --prefix docs/tapes --no-audit --no-fund
+
+      - name: Play the tapes, in order
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path casts | Out-Null
+          foreach ($tape in @("windows-options", "windows-setup", "first-site")) {
+            Write-Host "== $tape"
+            node docs/tapes/record.mjs "docs/tapes/$tape.tape" "casts/$tape.cast"
+            if ($LASTEXITCODE -ne 0) { throw "docs/tapes/$tape.tape failed" }
+          }
+
+      - name: The setup logs, in the job log
+        if: always()
+        shell: pwsh
+        run: |
+          foreach ($log in @(Get-ChildItem "$env:LOCALAPPDATA/WSL2Setup/*.log" -ErrorAction SilentlyContinue)) {
+            Write-Host "--- $($log.Name), last lines"
+            Get-Content -LiteralPath $log.FullName -Tail 60
+          }
+          if (Test-Path "$env:USERPROFILE/.wslconfig") {
+            Write-Host "--- .wslconfig"
+            Get-Content "$env:USERPROFILE/.wslconfig"
+          }
+          exit 0
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: demo-casts
+          path: casts/*.cast
+          if-no-files-found: ignore
+
+  render:
+    name: Render and commit the GIFs
+    needs: record
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      # Credentials stay only when the job commits the GIFs.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: ${{ github.event_name == 'push' || inputs.commit }}
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: demo-casts
+          path: casts
+
+      - name: agg
+        run: |
+          bin="$RUNNER_TEMP/bin"
+          mkdir -p "$bin"
+          curl -fsSL -o "$bin/agg" "https://github.com/asciinema/agg/releases/download/${AGG_VERSION}/agg-x86_64-unknown-linux-gnu"
+          echo "${AGG_SHA256}  $bin/agg" | sha256sum -c -
+          chmod +x "$bin/agg"
+          echo "$bin" >>"$GITHUB_PATH"
+
+      # The colors of the tapes' theme (Catppuccin Mocha): background, foreground, then the 16 colors.
+      - name: Render the GIFs
+        run: |
+          theme="1e1e2e,cdd6f4,45475a,f38ba8,a6e3a1,f9e2af,89b4fa,f5c2e7,94e2d5,bac2de,585b70,f38ba8,a6e3a1,f9e2af,89b4fa,f5c2e7,94e2d5,a6adc8"
+          mkdir -p docs/media
+          for cast in casts/*.cast; do
+            name="$(basename "$cast" .cast)"
+            size="$(sed -n 's/^Set FontSize \([0-9]*\)$/\1/p' "docs/tapes/$name.tape")"
+            agg --font-size "${size:-15}" --theme "$theme" --idle-time-limit 2 --last-frame-duration 6 \
+              "$cast" "docs/media/$name.gif"
+          done
+          ls -l docs/media
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: demo-gifs
+          path: docs/media/*.gif
+
+      - name: Commit the GIFs
+        if: github.event_name == 'push' || inputs.commit
+        run: |
+          git add docs/media/*.gif
+          if git diff --cached --quiet; then
+            echo "GIFs unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "docs: record the setup GIFs"
+          # The branch may have moved on while the tapes were playing: the GIFs go on top of it.
+          for try in 1 2 3; do
+            if git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME"; then
+              exit 0
+            fi
+            sleep $((try * 5))
+          done
+          echo "could not push the GIFs to $GITHUB_REF_NAME" >&2
+          exit 1

@@ -4,16 +4,18 @@
 # Ubuntu 26.04 (resolute), on WSL2 or on a plain machine.
 #
 # Installs: PHP 5.6-8.5 (CLI + FPM, packages.sury.org), Apache 2.4, MariaDB 11.8 LTS,
-# PostgreSQL 18 (pgdg), Redis, Composer 2 + 1, Gash (+ `gash hte` for local sites), nvm + Node LTS.
-# On WSL it also applies the WSL base tuning: systemd, /tmp on tmpfs, TRIM, no tty getty.
+# PostgreSQL 18 (pgdg), Redis, Composer 2 + 1, Gash (+ `gash hte` for local sites), nvm + Node LTS,
+# and the interactive shell you choose: Bash with Gash (default), Bash with fzf/zoxide/starship,
+# a minimal Zsh, Fish, or the plain Bash.
+# On WSL it also applies the WSL base tuning: systemd, /etc/wsl.conf, /tmp on tmpfs, TRIM, no tty getty.
 #
 # The script converges: every step checks the current state and changes only what differs,
 # so running it again is safe and is the way to resume after a failure.
 #
 # Author: Maurizio Fonte (https://www.mauriziofonte.it)
-# Version: 2.0.0
+# Version: 2.1.0
 # Release Date: 2023-09-04
-# Last Update: 2026-10-25
+# Last Update: 2026-10-29
 # License: MIT License
 #
 # Report issues: https://github.com/mauriziofonte/win11-wsl2-ubuntu-debian-setup/issues
@@ -22,11 +24,17 @@
 
     set -Eeuo pipefail
 
-    LLS_VERSION="2.0.0"
+    LLS_VERSION="2.1.0"
     LLS_PHP_ALL="5.6 7.0 7.1 7.2 7.3 7.4 8.0 8.1 8.2 8.3 8.4 8.5"
     LLS_PHP_MODS="cli fpm bcmath bz2 curl gd gmp igbinary imagick imap intl mbstring mcrypt memcached msgpack mysql opcache pgsql readline redis soap sqlite3 xml xsl zip"
     LLS_MARIADB_SERIES="11.8"
     LLS_NVM_VERSION="v0.40.8"
+    LLS_GASH_INSTALLER="https://raw.githubusercontent.com/mauriziofonte/gash/main/install.sh"
+    # starship for the distributions that do not package it (Ubuntu 24.04): a pinned release, checked by SHA-256.
+    LLS_STARSHIP_VERSION="1.27.0"
+    LLS_STARSHIP_SHA256_X86_64="10c8eb4cb3b761d9bf59ea828444c2dab36c900b7d69a69e08814b286969df89"
+    LLS_STARSHIP_SHA256_AARCH64="341f5cbf24699fa0b27ec88965ad25f862ea09e15d35a543fd6ffdff1d2aa00d"
+    LLS_WSL_INIT_TIMEOUT="30000"
     LLS_MANAGED="# Managed by lamp-lapp-stack.sh: re-running the installer rewrites this file."
 
     # Options (see lls_usage)
@@ -39,6 +47,9 @@
     OPT_WSL=auto
     OPT_TMP_SIZE="25%"
     OPT_HTE_PORTS="standard"
+    OPT_SHELL=""
+    OPT_WSL_INIT_TIMEOUT=""
+    OPT_WSL_APPEND_PATH=""
 
     lls_echo() {
         local color="\e[1;97m"
@@ -62,12 +73,24 @@ Usage: lamp-lapp-stack.sh [options]
   -y, --yes            never prompt, take the defaults (needed without a terminal)
   --php "X.Y ..."      PHP versions to install (default: "$LLS_PHP_ALL")
   --pg N               PostgreSQL major from pgdg (default: $OPT_PG)
-  --no-gash            do not install Gash (implies --no-hte)
+  --shell S            interactive shell (asked when not given, on a terminal without --yes):
+                         gash       Bash with Gash (the default)
+                         bash-plus  Bash with fzf, zoxide and the starship prompt
+                         zsh        Zsh with autosuggestions and syntax highlighting (no Oh My Zsh)
+                         fish       Fish for the terminal; Bash stays the login shell and runs the scripts
+                         bash       the distribution's Bash, unchanged
+                       with every shell but gash, the gash command is still installed, for gash hte
+  --no-gash            do not install Gash (implies --no-hte and --shell bash)
   --no-hte             install Gash but do not run "gash hte install"
   --hte-ports P        ports for gash hte: standard (80/443) or high (default: standard)
   --no-node            do not install nvm and Node LTS
   --wsl | --no-wsl     force or skip the WSL base tuning (default: detected)
   --tmp-size SIZE      /tmp tmpfs cap on WSL, a size or a % of RAM (default: $OPT_TMP_SIZE)
+  --wsl-init-timeout MS
+                       /etc/wsl.conf [boot] initTimeout, the milliseconds WSL waits for systemd
+                       (1000-600000; default: $LLS_WSL_INIT_TIMEOUT, an existing value is kept)
+  --wsl-append-windows-path true|false
+                       /etc/wsl.conf [interop] appendWindowsPath (default: left as it is)
   -h, --help           this help
 
 Run it as your normal user (it uses sudo). Running it again is safe.
@@ -87,6 +110,9 @@ EOF
                 --no-wsl) OPT_WSL=0 ;;
                 --tmp-size) OPT_TMP_SIZE="${2-}"; shift ;;
                 --hte-ports) OPT_HTE_PORTS="${2-}"; shift ;;
+                --shell) OPT_SHELL="${2-}"; shift ;;
+                --wsl-init-timeout) OPT_WSL_INIT_TIMEOUT="${2-}"; shift ;;
+                --wsl-append-windows-path) OPT_WSL_APPEND_PATH="${2-}"; shift ;;
                 -h | --help) lls_usage; exit 0 ;;
                 *) lls_echo error "Unknown option: $1"; lls_usage; exit 1 ;;
             esac
@@ -104,6 +130,51 @@ EOF
         [[ "$OPT_PG" =~ ^[0-9]+$ ]] || { lls_echo error "--pg needs a major version number"; exit 1; }
         [[ "$OPT_TMP_SIZE" =~ ^[0-9]+[KMG%]?$ ]] || { lls_echo error "--tmp-size: use e.g. 6G or 25%"; exit 1; }
         [[ "$OPT_HTE_PORTS" =~ ^(standard|high)$ ]] || { lls_echo error "--hte-ports: standard or high"; exit 1; }
+        if [ -n "$OPT_WSL_INIT_TIMEOUT" ]; then
+            [[ "$OPT_WSL_INIT_TIMEOUT" =~ ^[0-9]+$ ]] && [ "$OPT_WSL_INIT_TIMEOUT" -ge 1000 ] && [ "$OPT_WSL_INIT_TIMEOUT" -le 600000 ] ||
+                { lls_echo error "--wsl-init-timeout: milliseconds, from 1000 to 600000"; exit 1; }
+        fi
+        [[ "$OPT_WSL_APPEND_PATH" =~ ^(|true|false)$ ]] || { lls_echo error "--wsl-append-windows-path: true or false"; exit 1; }
+        if [ "$OPT_WSL" = 0 ] && [ -n "$OPT_WSL_INIT_TIMEOUT$OPT_WSL_APPEND_PATH" ]; then
+            lls_echo error "--wsl-init-timeout and --wsl-append-windows-path set /etc/wsl.conf: they exclude --no-wsl"
+            exit 1
+        fi
+        if [ -n "$OPT_SHELL" ]; then
+            [[ "$OPT_SHELL" =~ ^(gash|bash-plus|zsh|fish|bash)$ ]] || { lls_echo error "--shell: gash, bash-plus, zsh, fish or bash"; exit 1; }
+            if [ "$OPT_SHELL" = gash ] && [ "$OPT_GASH" -eq 0 ]; then
+                lls_echo error "--shell gash and --no-gash exclude each other"
+                exit 1
+            fi
+        fi
+    }
+
+    # The shell, when no --shell was given: asked on a terminal, else Bash with Gash (plain Bash with --no-gash).
+    lls_choose_shell() {
+        [ -z "$OPT_SHELL" ] || return 0
+        local default=gash reply
+        [ "$OPT_GASH" -eq 1 ] || default=bash
+        if [ "$OPT_YES" -eq 1 ] || ! { : </dev/tty; } 2>/dev/null; then
+            OPT_SHELL="$default"
+            return 0
+        fi
+        echo "Interactive shell:"
+        [ "$OPT_GASH" -eq 1 ] && echo "  1) gash       Bash with Gash (recommended)"
+        echo "  2) bash-plus  Bash with fzf, zoxide and the starship prompt"
+        echo "  3) zsh        Zsh with autosuggestions and syntax highlighting"
+        echo "  4) fish       Fish for the terminal, Bash for the scripts"
+        echo "  5) bash       the distribution's Bash, unchanged"
+        read -r -p "Your choice [Enter = $default] " reply </dev/tty || reply=""
+        case "$reply" in
+            1) OPT_SHELL=gash ;;
+            2) OPT_SHELL=bash-plus ;;
+            3) OPT_SHELL=zsh ;;
+            4) OPT_SHELL=fish ;;
+            5) OPT_SHELL=bash ;;
+            *) OPT_SHELL="$default" ;;
+        esac
+        if [ "$OPT_SHELL" = gash ] && [ "$OPT_GASH" -eq 0 ]; then
+            OPT_SHELL=bash
+        fi
     }
 
     # Yes/no question; the default wins with --yes or without a terminal.
@@ -157,6 +228,16 @@ EOF
         ' "$file" | lls_put_file "$file" 0644
     }
 
+    # Prints the value of key inside [section] of an INI file (nothing when it is not set).
+    lls_ini_get() {
+        local file="$1" section="$2" key="$3"
+        [ -r "$file" ] || return 0
+        awk -v sec="$section" -v key="$key" '
+            /^[[:space:]]*\[/ { insec = ($0 ~ "^[[:space:]]*\\[" sec "\\][[:space:]]*$"); next }
+            insec && $0 ~ "^[[:space:]]*" key "[[:space:]]*=" { sub(/^[^=]*=[[:space:]]*/, ""); sub(/[[:space:]]+$/, ""); print; exit }
+        ' "$file"
+    }
+
     lls_on_error() {
         lls_echo error "FAILED at line $1 (exit $2). Fix the cause and run the installer again: completed steps are skipped."
         lls_echo error "Full log: $LLS_LOG"
@@ -194,7 +275,7 @@ EOF
         fi
 
         lls_echo "System: ${PRETTY_NAME-} ($LLS_CODENAME), user: $USER, WSL tuning: $([ "$OPT_WSL" -eq 1 ] && echo yes || echo no)"
-        lls_echo "PHP: $OPT_PHP | MariaDB $LLS_MARIADB_SERIES | PostgreSQL $OPT_PG"
+        lls_echo "PHP: $OPT_PHP | MariaDB $LLS_MARIADB_SERIES | PostgreSQL $OPT_PG | shell: $OPT_SHELL"
         lls_echo warning "For development machines only: do not run this on a production server."
 
         if ! lls_ask "Continue?" y; then
@@ -242,6 +323,17 @@ EOF
         # WSL runs "mount -a" before /mnt/c exists; systemd mounts /etc/fstab itself.
         lls_ini_set /etc/wsl.conf automount mountFsTab false && changed=1
         lls_ini_set /etc/wsl.conf user default "$USER" && changed=1
+        # WSL waits 10 s for systemd by default: a slow first boot (tmpfiles cleanup, fsck) then loses the user session.
+        # An explicit option wins; otherwise a value already in the file is kept.
+        local init_timeout="$OPT_WSL_INIT_TIMEOUT"
+        if [ -z "$init_timeout" ]; then
+            init_timeout="$(lls_ini_get /etc/wsl.conf boot initTimeout)"
+            [ -n "$init_timeout" ] || init_timeout="$LLS_WSL_INIT_TIMEOUT"
+        fi
+        lls_ini_set /etc/wsl.conf boot initTimeout "$init_timeout" && changed=1
+        if [ -n "$OPT_WSL_APPEND_PATH" ]; then
+            lls_ini_set /etc/wsl.conf interop appendWindowsPath "$OPT_WSL_APPEND_PATH" && changed=1
+        fi
 
         if [ -d /run/systemd/system ]; then
             # /tmp on tmpfs: a disk /tmp is wiped by systemd-tmpfiles at every boot, which slows WSL boot down.
@@ -360,6 +452,7 @@ EOF
 
         # The newest installed PHP is the default "php".
         local newest
+        # shellcheck disable=SC2086
         newest="$(printf '%s\n' $OPT_PHP | sort -V | tail -1)"
         local alt
         for alt in php phar phar.phar; do
@@ -506,9 +599,22 @@ EOF
         [ "$OPT_GASH" -eq 1 ] || return 0
         lls_echo step "== Gash"
         if [ ! -d "$HOME/.gash" ]; then
-            wget -qO- https://raw.githubusercontent.com/mauriziofonte/gash/refs/heads/main/install.sh | bash -s -- --assume-yes --quiet
+            if [ "$OPT_SHELL" = gash ]; then
+                wget -qO- "$LLS_GASH_INSTALLER" | bash -s -- --assume-yes --quiet
+            else
+                # Gash as a command only: its installer leaves every shell profile alone.
+                wget -qO- "$LLS_GASH_INSTALLER" | PROFILE=/dev/null bash -s -- --assume-yes --quiet
+            fi
         else
-            lls_echo log "  already installed: update it with Gash's own updater"
+            lls_echo log "  already installed: update it with \"gash update\""
+        fi
+        if [ "$OPT_SHELL" != gash ] && [ -x "$HOME/.gash/bin/gash" ]; then
+            # The launcher on PATH, so that "gash hte ..." works from any shell.
+            mkdir -p "$HOME/.local/bin"
+            if [ "$(readlink "$HOME/.local/bin/gash" 2>/dev/null)" != "$HOME/.gash/bin/gash" ]; then
+                ln -sfn "$HOME/.gash/bin/gash" "$HOME/.local/bin/gash"
+                lls_echo log "  linked ~/.local/bin/gash"
+            fi
         fi
 
         [ "$OPT_HTE" -eq 1 ] || return 0
@@ -523,12 +629,15 @@ EOF
         sudo a2dissite -q 000-default >/dev/null 2>&1 || true
         "$gash_bin" hte install --yes --ports "$OPT_HTE_PORTS"
 
-        # gash hte runs its own PHP-FPM masters: the system ones would only hold memory (~70 MB per version).
-        local v
-        for v in $OPT_PHP; do
-            if systemctl is-enabled --quiet "php$v-fpm.service" 2>/dev/null || systemctl is-active --quiet "php$v-fpm.service"; then
-                sudo systemctl disable --now --quiet "php$v-fpm.service"
-                lls_echo log "  disabled the system php$v-fpm (gash hte runs its own)"
+        # gash hte runs its own Apache and PHP-FPM masters: the system ones would only hold memory
+        # (~70 MB per PHP version). On ports 80/443 gash hte stops the system Apache itself; on the
+        # high ports it leaves it alone, so the installer does it here.
+        local v unit units="apache2"
+        for v in $OPT_PHP; do units="$units php$v-fpm"; done
+        for unit in $units; do
+            if systemctl is-enabled --quiet "$unit.service" 2>/dev/null || systemctl is-active --quiet "$unit.service"; then
+                sudo systemctl disable --now --quiet "$unit.service"
+                lls_echo log "  disabled the system $unit (gash hte runs its own)"
             fi
         done
     }
@@ -549,6 +658,237 @@ EOF
         lls_echo log "  node $(nvm version default 2>/dev/null || nvm current)"
     }
 
+    # Writes stdin as a block between markers at the end of a file of the user, replacing the
+    # previous block and keeping every other line.
+    lls_user_block() {
+        local file="$1" begin="# >>> lamp-lapp-stack >>>" end="# <<< lamp-lapp-stack <<<" tmp
+        tmp="$(mktemp)"
+        {
+            if [ -f "$file" ]; then
+                awk -v b="$begin" -v e="$end" '$0 == b { skip = 1; next } $0 == e { skip = 0; next } !skip' "$file"
+            fi
+            echo "$begin"
+            echo "# Managed by lamp-lapp-stack.sh: re-running the installer rewrites this block."
+            cat
+            echo "$end"
+        } >"$tmp"
+        if cmp -s "$tmp" "$file"; then
+            rm -f "$tmp"
+            return 0
+        fi
+        cat "$tmp" >"$file"
+        rm -f "$tmp"
+        lls_echo log "  wrote the lamp-lapp-stack block of $file"
+    }
+
+    # Removes a block (by default the lamp-lapp-stack one) from a file of the user, if it has one.
+    lls_user_block_remove() {
+        local file="$1" begin="${2:-# >>> lamp-lapp-stack >>>}" end="${3:-# <<< lamp-lapp-stack <<<}" what="${4:-lamp-lapp-stack}" tmp
+        [ -f "$file" ] && grep -qxF "$begin" "$file" || return 0
+        tmp="$(mktemp)"
+        awk -v b="$begin" -v e="$end" '$0 == b { skip = 1; next } $0 == e { skip = 0; next } !skip' "$file" >"$tmp"
+        cat "$tmp" >"$file"
+        rm -f "$tmp"
+        lls_echo log "  removed the $what block of $file"
+    }
+
+    # Writes stdin to a file of the user only when the content differs.
+    lls_user_file() {
+        local file="$1" tmp
+        tmp="$(mktemp)"
+        cat >"$tmp"
+        if cmp -s "$tmp" "$file"; then
+            rm -f "$tmp"
+            return 0
+        fi
+        mkdir -p "$(dirname "$file")"
+        cat "$tmp" >"$file"
+        rm -f "$tmp"
+        lls_echo log "  wrote $file"
+    }
+
+    # Makes PATH the login shell, unless the current one is the same program (/bin/bash is /usr/bin/bash).
+    lls_login_shell() {
+        local want="$1"
+        if [ "$(readlink -f "$(getent passwd "$USER" | cut -d: -f7)")" != "$(readlink -f "$want")" ]; then
+            sudo chsh -s "$want" "$USER"
+            lls_echo log "  login shell of $USER: $want"
+        fi
+    }
+
+    # The starship prompt: from the distribution when it packages it, otherwise the pinned release.
+    lls_starship() {
+        if command -v starship >/dev/null; then
+            return 0
+        fi
+        if apt-cache policy starship 2>/dev/null | grep -q 'Candidate: [0-9]'; then
+            lls_apt install starship
+            return 0
+        fi
+        local arch sum tmp
+        case "$(dpkg --print-architecture)" in
+            amd64) arch=x86_64; sum="$LLS_STARSHIP_SHA256_X86_64" ;;
+            arm64) arch=aarch64; sum="$LLS_STARSHIP_SHA256_AARCH64" ;;
+            *) lls_echo warning "  starship: no release for $(dpkg --print-architecture), the prompt stays as it is"; return 0 ;;
+        esac
+        tmp="$(mktemp -d)"
+        curl -fsSLo "$tmp/starship.tar.gz" \
+            "https://github.com/starship/starship/releases/download/v$LLS_STARSHIP_VERSION/starship-$arch-unknown-linux-musl.tar.gz"
+        echo "$sum  $tmp/starship.tar.gz" | sha256sum -c --quiet -
+        tar -xzf "$tmp/starship.tar.gz" -C "$tmp" starship
+        sudo install -m 0755 "$tmp/starship" /usr/local/bin/starship
+        rm -rf "$tmp"
+        lls_echo log "  installed /usr/local/bin/starship $LLS_STARSHIP_VERSION (SHA-256 checked)"
+    }
+
+    lls_shell() {
+        lls_echo step "== Shell: $OPT_SHELL"
+        local bash_path
+        bash_path="$(command -v bash)"
+        case "$OPT_SHELL" in
+            bash-plus) lls_apt install bash-completion fzf zoxide ;;
+            zsh) lls_apt install zsh zsh-autosuggestions zsh-syntax-highlighting fzf zoxide ;;
+            fish) lls_apt install fish fzf zoxide ;;
+        esac
+        case "$OPT_SHELL" in
+            bash-plus | zsh | fish) lls_starship ;;
+        esac
+
+        # The Gash block of ~/.bashrc (the Gash installer writes it) follows the choice: the gash command stays either way.
+        local gash_begin="# >>> GASH START >>>" gash_end="# <<< GASH END <<<"
+        if [ "$OPT_SHELL" = gash ]; then
+            if [ -f "$HOME/.gashrc" ] && ! grep -qxF "$gash_begin" "$HOME/.bashrc" 2>/dev/null; then
+                # The block of the Gash installer, as it writes it.
+                # shellcheck disable=SC2016
+                printf '\n%s\n# Load Gash Bash - Do not edit this block, it is managed by Gash installer\nif [ -f "$HOME/.gashrc" ]; then\n  source "$HOME/.gashrc"\nfi\n%s\n' \
+                    "$gash_begin" "$gash_end" >>"$HOME/.bashrc"
+                lls_echo log "  wrote the Gash block of $HOME/.bashrc"
+            fi
+        else
+            lls_user_block_remove "$HOME/.bashrc" "$gash_begin" "$gash_end" Gash
+        fi
+
+        # ~/.bashrc carries a block only for bash-plus (the tools) and fish (the hand-over to fish).
+        case "$OPT_SHELL" in
+            bash-plus)
+                # A ~/.inputrc replaces /etc/inputrc, so it includes it first.
+                lls_user_file "$HOME/.inputrc" <<'INPUTRC'
+# Managed by lamp-lapp-stack.sh (--shell bash-plus): re-running the installer rewrites this file.
+$include /etc/inputrc
+set completion-ignore-case on
+set show-all-if-ambiguous on
+set colored-stats on
+"\e[A": history-search-backward
+"\e[B": history-search-forward
+INPUTRC
+                lls_user_block "$HOME/.bashrc" <<'BASHRC'
+if [[ $- == *i* ]]; then
+    shopt -s histappend checkwinsize globstar cdspell
+    HISTSIZE=100000
+    HISTFILESIZE=200000
+    HISTCONTROL=ignoreboth:erasedups
+    PROMPT_COMMAND="history -a${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
+    # fzf: Ctrl-R history, Ctrl-T files, Alt-C directories ("fzf --bash" exists from 0.48; Ubuntu 24.04 has 0.44).
+    if fzf --bash >/dev/null 2>&1; then
+        eval "$(fzf --bash)"
+    elif [ -f /usr/share/doc/fzf/examples/key-bindings.bash ]; then
+        . /usr/share/doc/fzf/examples/key-bindings.bash
+    fi
+    eval "$(zoxide init bash)"
+    eval "$(starship init bash)"
+fi
+BASHRC
+                ;;
+            fish)
+                # Bash stays the login shell (scripts, IDEs and "sudo -s" expect a POSIX shell): an interactive
+                # Bash started by a terminal hands over to fish. "bash" typed inside fish stays Bash.
+                lls_user_block "$HOME/.bashrc" <<'BASHRC'
+if [[ $- == *i* && -z ${BASH_EXECUTION_STRING-} && $(ps -o comm= -p "$PPID" 2>/dev/null) != fish ]] && command -v fish >/dev/null; then
+    shopt -q login_shell && exec fish --login
+    exec fish
+fi
+BASHRC
+                ;;
+            *) lls_user_block_remove "$HOME/.bashrc" ;;
+        esac
+        if [ "$OPT_SHELL" != bash-plus ] && [ -f "$HOME/.inputrc" ] && grep -q '^# Managed by lamp-lapp-stack.sh' "$HOME/.inputrc"; then
+            rm -f "$HOME/.inputrc"
+            lls_echo log "  removed $HOME/.inputrc"
+        fi
+
+        case "$OPT_SHELL" in
+            zsh)
+                # Zsh reads neither ~/.bashrc nor ~/.profile: PATH (the gash launcher) and nvm go here too.
+                # Plugins come from the distribution's packages; syntax highlighting must be loaded last.
+                lls_user_block "$HOME/.zshrc" <<'ZSHRC'
+case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) export PATH="$HOME/.local/bin:$PATH" ;; esac
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+HISTFILE=~/.zsh_history
+HISTSIZE=100000
+SAVEHIST=100000
+setopt SHARE_HISTORY HIST_IGNORE_ALL_DUPS HIST_IGNORE_SPACE AUTO_CD
+mkdir -p ~/.cache/zsh
+autoload -Uz compinit && compinit -d ~/.cache/zsh/zcompdump
+[ -f /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh ] && . /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+if fzf --zsh >/dev/null 2>&1; then
+    source <(fzf --zsh)
+elif [ -f /usr/share/doc/fzf/examples/key-bindings.zsh ]; then
+    . /usr/share/doc/fzf/examples/key-bindings.zsh
+fi
+eval "$(zoxide init zsh)"
+eval "$(starship init zsh)"
+[ -f /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ] && . /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+ZSHRC
+                lls_login_shell "$(command -v zsh)"
+                ;;
+            fish)
+                # nvm is a Bash function: "nvm" in fish runs it through Bash and takes the Node it selects onto PATH.
+                lls_user_file "$HOME/.config/fish/conf.d/lamp-lapp-stack.fish" <<'FISH'
+# Managed by lamp-lapp-stack.sh (--shell fish): re-running the installer rewrites this file.
+fish_add_path --global $HOME/.local/bin
+set --global --export NVM_DIR $HOME/.nvm
+
+function nvm --description 'nvm, run through Bash'
+    set --local bin (bash -c 'source "$NVM_DIR/nvm.sh" --no-use; nvm "$@" >&2 || exit $?; current=$(nvm which current 2>/dev/null) && dirname "$current"' nvm $argv)
+    set --local code $status
+    if test $code -eq 0; and test -n "$bin"; and test -d "$bin"
+        set --local keep
+        for dir in $PATH
+            string match --quiet -- "$NVM_DIR/*" $dir; or set --append keep $dir
+        end
+        set --global --export PATH $bin $keep
+    end
+    return $code
+end
+
+if status is-interactive
+    if test -s $NVM_DIR/nvm.sh; and not type --query node
+        nvm use --silent default >/dev/null 2>&1
+    end
+    if fzf --fish >/dev/null 2>&1
+        fzf --fish | source
+    else if functions --query fzf_key_bindings
+        fzf_key_bindings
+    else if test -f /usr/share/doc/fzf/examples/key-bindings.fish
+        source /usr/share/doc/fzf/examples/key-bindings.fish
+        fzf_key_bindings
+    end
+    zoxide init fish | source
+    starship init fish | source
+end
+FISH
+                lls_login_shell "$bash_path"
+                ;;
+            *)
+                # Back to Bash when an earlier run had made Zsh the login shell.
+                case "$(getent passwd "$USER" | cut -d: -f7)" in
+                    */zsh | */fish) lls_login_shell "$bash_path" ;;
+                esac
+                ;;
+        esac
+    }
+
     lls_summary() {
         # "sudo -u postgres" opens a user session whose /run/user cleanup fails on WSL: harmless, but it marks the system "degraded".
         sudo systemctl reset-failed 'user-runtime-dir@*.service' 2>/dev/null || true
@@ -558,6 +898,13 @@ EOF
         if [ "$OPT_HTE" -eq 1 ]; then
             lls_echo "Local sites: gash hte site create --domain example.test --docroot public"
         fi
+        case "$OPT_SHELL" in
+            gash) lls_echo "Shell: Bash with Gash. Open a new terminal, then run: gash" ;;
+            bash-plus) lls_echo "Shell: Bash with fzf, zoxide and starship. Open a new terminal." ;;
+            zsh) lls_echo "Shell: Zsh with autosuggestions and syntax highlighting. Open a new terminal." ;;
+            fish) lls_echo "Shell: Fish in the terminal, Bash for the scripts. Open a new terminal." ;;
+            bash) lls_echo "Shell: the distribution's Bash, unchanged" ;;
+        esac
         lls_echo "SSH key: none created. See the guide, \"Create your SSH key\"."
         if [ "${LLS_NEEDS_WSL_RESTART-0}" -eq 1 ]; then
             lls_echo warning "WSL settings changed: from Windows run  wsl --terminate ${WSL_DISTRO_NAME:-<distro>}  then reopen the terminal."
@@ -566,6 +913,7 @@ EOF
 
     lls_main() {
         lls_parse_args "$@"
+        lls_choose_shell
         # Work from the home directory: helper scripts (mariadb_repo_setup) download into the current
         # directory, and a terminal opened from Windows often starts in /mnt/c, where root cannot write.
         cd "$HOME"
@@ -584,6 +932,7 @@ EOF
         lls_composer
         lls_gash
         lls_node
+        lls_shell
         lls_summary
     }
 

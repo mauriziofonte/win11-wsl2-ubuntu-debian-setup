@@ -12,9 +12,20 @@
 # License: MIT License
 
 # No validation attributes here: under "irm | iex" this block runs as plain variable declarations
-# in the caller's scope, and a ValidateSet would reject the empty default. win11.ps1 validates -Distro.
+# in the caller's scope, and a ValidateSet would reject the empty default. win11.ps1 validates every option.
 param (
     [String]$Distro = "",
+    [String]$Shell = "",
+    [String]$VmProfile = "",
+    [Int]$WslMemoryGB = 0,
+    [Int]$WslProcessors = 0,
+    [Int]$WslSwapGB = -1,
+    [String]$WslNetworking = "",
+    [String]$WslGui = "",
+    [Int]$VhdSizeGB = -1,
+    [Int]$WslInitTimeout = 0,
+    [String]$WslAppendWindowsPath = "",
+    [Switch]$Unattended,
     [Switch]$DryRun,
     [Switch]$SkipWindowsVersionCheck,
     [Switch]$Force
@@ -55,6 +66,17 @@ catch {
 
 $arguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$target`"")
 if ($Distro) { $arguments += @("-Distro", $Distro) }
+if ($Shell) { $arguments += @("-Shell", $Shell) }
+if ($VmProfile) { $arguments += @("-VmProfile", $VmProfile) }
+if ($WslMemoryGB -ne 0) { $arguments += @("-WslMemoryGB", $WslMemoryGB) }
+if ($WslProcessors -ne 0) { $arguments += @("-WslProcessors", $WslProcessors) }
+if ($WslSwapGB -ne -1) { $arguments += @("-WslSwapGB", $WslSwapGB) }
+if ($WslNetworking) { $arguments += @("-WslNetworking", $WslNetworking) }
+if ($WslGui) { $arguments += @("-WslGui", $WslGui) }
+if ($VhdSizeGB -ne -1) { $arguments += @("-VhdSizeGB", $VhdSizeGB) }
+if ($WslInitTimeout -ne 0) { $arguments += @("-WslInitTimeout", $WslInitTimeout) }
+if ($WslAppendWindowsPath) { $arguments += @("-WslAppendWindowsPath", $WslAppendWindowsPath) }
+if ($Unattended) { $arguments += "-Unattended" }
 if ($DryRun) { $arguments += "-DryRun" }
 if ($SkipWindowsVersionCheck) { $arguments += "-SkipWindowsVersionCheck" }
 if ($Force) { $arguments += "-Force" }

@@ -8,11 +8,11 @@
 	},
 	"workbench.editor.showTabs": true,
 	"terminal.integrated.fontFamily": "Source Code Pro",
-	"terminal.integrated.lineHeight": 0.8,
+	"terminal.integrated.lineHeight": 1,
 	"terminal.integrated.enableVisualBell": false,
 	"terminal.integrated.letterSpacing": -0.1,
 	"terminal.integrated.fontSize": 16,
-	"editor.fontFamily": "Roboto Sans",
+	"editor.fontFamily": "'Roboto Mono', 'Source Code Pro', monospace",
 	"editor.fontWeight": "600",
 	"editor.cursorStyle": "line",
 	"editor.cursorBlinking": "phase",
@@ -46,10 +46,6 @@
 		"editor.formatOnSave": true,
 		"editor.defaultFormatter": "junstyle.php-cs-fixer"
 	},
-	"[js]": {
-		"editor.formatOnSave": true,
-		"editor.defaultFormatter": "esbenp.prettier-vscode"
-	},
 	"[javascript]": {
 		"editor.formatOnSave": true,
 		"editor.defaultFormatter": "esbenp.prettier-vscode"
@@ -58,7 +54,7 @@
 		"editor.formatOnSave": true,
 		"editor.defaultFormatter": "esbenp.prettier-vscode"
 	},
-	"[jsx]": {
+	"[javascriptreact]": {
 		"editor.formatOnSave": true,
 		"editor.defaultFormatter": "esbenp.prettier-vscode"
 	},
@@ -74,11 +70,9 @@
 	"git.enableSmartCommit": true,
 	"git.autofetch": true,
 	"git.confirmSync": false,
-	"php-cs-fixer.executablePath": "/home/##LINUX_USERNAME##/.config/composer/vendor/bin/php-cs-fixer",
-	"php-cs-fixer.executablePathWindows": "",
 	"php-cs-fixer.onsave": false,
-	"php-cs-fixer.rules": "@PSR2",
-	"php-cs-fixer.config": ".php_cs;.php_cs.dist",
+	"php-cs-fixer.rules": "@PSR12",
+	"php-cs-fixer.config": ".php-cs-fixer.php;.php-cs-fixer.dist.php;.php_cs;.php_cs.dist",
 	"php-cs-fixer.allowRisky": false,
 	"php-cs-fixer.pathMode": "override",
 	"php-cs-fixer.exclude": [],
