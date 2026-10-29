@@ -45,10 +45,17 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path docs/media | Out-Null
-          foreach ($tape in @("windows-options", "windows-setup", "first-site")) {
+          # Minutes each tape may take: a Wait that never matches must not hold the job until its timeout.
+          $tapes = [ordered]@{ "windows-options" = 10; "windows-setup" = 75; "first-site" = 15 }
+          foreach ($tape in $tapes.Keys) {
             Write-Host "== $tape"
-            vhs "docs/tapes/$tape.tape"
-            if ($LASTEXITCODE -ne 0) { throw "vhs docs/tapes/$tape.tape failed with exit status $LASTEXITCODE" }
+            $vhs = Start-Process -FilePath vhs -ArgumentList "docs/tapes/$tape.tape" -NoNewWindow -PassThru
+            $null = $vhs.Handle
+            if (-not $vhs.WaitForExit($tapes[$tape] * 60000)) {
+              Stop-Process -Id $vhs.Id -Force
+              throw "vhs docs/tapes/$tape.tape did not finish in $($tapes[$tape]) minutes"
+            }
+            if ($vhs.ExitCode -ne 0) { throw "vhs docs/tapes/$tape.tape failed with exit status $($vhs.ExitCode)" }
           }
           Get-ChildItem docs/media/*.gif | Format-Table Name, Length
 
@@ -58,6 +65,14 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP/demo-logs" | Out-Null
           Copy-Item -Path "$env:LOCALAPPDATA/WSL2Setup/*.log", "$env:USERPROFILE/.wslconfig" -Destination "$env:RUNNER_TEMP/demo-logs" -ErrorAction SilentlyContinue
+          # The end of each log goes in the job log too, where it can be read without the artifact.
+          foreach ($log in @(Get-ChildItem "$env:RUNNER_TEMP/demo-logs/*.log" -ErrorAction SilentlyContinue)) {
+            Write-Host "--- $($log.Name), last lines"
+            Get-Content -LiteralPath $log.FullName -Tail 60
+          }
+          Write-Host "--- the stack installer's log in Debian, last lines"
+          wsl.exe -d Debian -u root --exec sh -c 'tail -n 40 /home/*/.local/state/lamp-lapp-stack/install-*.log' 2>&1
+          exit 0
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
