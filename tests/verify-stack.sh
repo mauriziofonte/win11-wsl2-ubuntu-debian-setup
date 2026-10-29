@@ -11,13 +11,17 @@
 # The expectations follow the installer's options, passed as environment variables:
 #   PHP_VERSIONS   PHP versions installed (default: all, 5.6 to 8.5)
 #   PG             PostgreSQL major (default: 18)
-#   SHELL_CHOICE   gash, zsh or bash (default: gash)
+#   SHELL_CHOICE   gash, bash-plus, zsh, fish or bash (default: gash)
 #   EXPECT_GASH    1 or 0 (default: 1)
 #   EXPECT_HTE     1 or 0 (default: EXPECT_GASH)
 #   HTE_PORTS      standard or high (default: standard)
 #   EXPECT_NODE    1 or 0 (default: 1)
 #   EXPECT_WSL     1 or 0: the WSL tuning was applied (default: 1 on WSL, 0 elsewhere)
 #   TMP_SIZE       the --tmp-size value (default: 25%)
+#   WSL_INIT_TIMEOUT   /etc/wsl.conf [boot] initTimeout (default: 30000)
+#   WSL_APPEND_PATH    /etc/wsl.conf [interop] appendWindowsPath, true or false (default: not checked)
+#   The WSL virtual machine, as win11.ps1 configured it in .wslconfig (each one unchecked when empty):
+#   VM_MEMORY_GB, VM_PROCESSORS, VM_SWAP_GB, VM_NETWORKING (nat or mirrored), VM_DISK_GB
 #   SCOPE          installer (default), or manual: the guide's manual steps 4.2 and 4.3 ran instead of the
 #                  installer, so only the packages and the services they install are checked
 #
@@ -41,6 +45,13 @@ EXPECT_HTE="${EXPECT_HTE:-$EXPECT_GASH}"
 HTE_PORTS="${HTE_PORTS:-standard}"
 EXPECT_NODE="${EXPECT_NODE:-1}"
 TMP_SIZE="${TMP_SIZE:-25%}"
+WSL_INIT_TIMEOUT="${WSL_INIT_TIMEOUT:-30000}"
+WSL_APPEND_PATH="${WSL_APPEND_PATH-}"
+VM_MEMORY_GB="${VM_MEMORY_GB-}"
+VM_PROCESSORS="${VM_PROCESSORS-}"
+VM_SWAP_GB="${VM_SWAP_GB-}"
+VM_NETWORKING="${VM_NETWORKING-}"
+VM_DISK_GB="${VM_DISK_GB-}"
 SCOPE="${SCOPE:-installer}"
 ON_WSL=0
 if [ -e /proc/sys/fs/binfmt_misc/WSLInterop ] || grep -qi microsoft /proc/version 2>/dev/null; then
@@ -190,6 +201,17 @@ if [ "$EXPECT_WSL" -eq 1 ]; then
     check_eq "/etc/wsl.conf [boot] systemd=true" true ini_value /etc/wsl.conf boot systemd
     check_eq "/etc/wsl.conf [automount] mountFsTab=false" false ini_value /etc/wsl.conf automount mountFsTab
     check_eq "/etc/wsl.conf [user] default=$USER" "$USER" ini_value /etc/wsl.conf user default
+    check_eq "/etc/wsl.conf [boot] initTimeout=$WSL_INIT_TIMEOUT" "$WSL_INIT_TIMEOUT" ini_value /etc/wsl.conf boot initTimeout
+    if [ -n "$WSL_APPEND_PATH" ]; then
+        check_eq "/etc/wsl.conf [interop] appendWindowsPath=$WSL_APPEND_PATH" "$WSL_APPEND_PATH" ini_value /etc/wsl.conf interop appendWindowsPath
+        if [ "$PHASE" = reboot ]; then
+            if [ "$WSL_APPEND_PATH" = false ]; then
+                check "the Windows folders are not on PATH" bash -c '! printf "%s\n" "$PATH" | tr : "\n" | grep -q "^/mnt/c/"'
+            else
+                check "the Windows folders are on PATH" bash -c 'printf "%s\n" "$PATH" | tr : "\n" | grep -q "^/mnt/c/"'
+            fi
+        fi
+    fi
     check_match "tmp.mount caps /tmp at $TMP_SIZE" "size=${TMP_SIZE}," cat /etc/systemd/system/tmp.mount.d/size.conf
     check_match "tmp.mount is enabled" '^(enabled|static|generated|alias)' systemctl is-enabled tmp.mount
     if [ "$PHASE" = reboot ]; then
@@ -202,6 +224,41 @@ if [ "$EXPECT_WSL" -eq 1 ]; then
     check_eq "fstrim.timer is enabled and active" "enabled active" unit_state fstrim.timer
     check_eq "getty@tty1.service is masked" masked systemctl is-enabled getty@tty1.service
     check "no getty unit failed" bash -c '! systemctl --failed --plain --no-legend | grep -q getty'
+fi
+
+# ----------------------------------------------------------------------------------------------
+if [ "$ON_WSL" -eq 1 ] && [ -n "$VM_MEMORY_GB$VM_PROCESSORS$VM_SWAP_GB$VM_NETWORKING$VM_DISK_GB" ]; then
+    section "The WSL virtual machine follows .wslconfig (2)"
+    meminfo_kb() {
+        awk -v k="$1:" '$1 == k { print $2 }' /proc/meminfo
+    }
+    # The kernel keeps part of the RAM for itself: MemTotal is a little less than the memory given.
+    mem_fits() {
+        local kb
+        kb="$(meminfo_kb MemTotal)"
+        echo "MemTotal: $kb kB"
+        [ "$kb" -gt $(((VM_MEMORY_GB - 1) * 1048576)) ] && [ "$kb" -le $((VM_MEMORY_GB * 1048576)) ]
+    }
+    swap_fits() {
+        local kb
+        kb="$(meminfo_kb SwapTotal)"
+        echo "SwapTotal: $kb kB"
+        [ "$kb" -gt $((VM_SWAP_GB * 1048576 - 65536)) ] && [ "$kb" -le $((VM_SWAP_GB * 1048576)) ]
+    }
+    disk_gb() {
+        local bytes
+        bytes="$(lsblk -bdno SIZE "$(findmnt -no SOURCE /)")"
+        echo $((bytes / 1073741824))
+    }
+    [ -z "$VM_MEMORY_GB" ] || check "memory=${VM_MEMORY_GB}GB: the VM has $VM_MEMORY_GB GB of RAM" mem_fits
+    [ -z "$VM_PROCESSORS" ] || check_eq "processors=$VM_PROCESSORS: the VM has $VM_PROCESSORS processors" "$VM_PROCESSORS" nproc --all
+    if [ "$VM_SWAP_GB" = 0 ]; then
+        check_eq "swap=0: the VM has no swap" 0 meminfo_kb SwapTotal
+    elif [ -n "$VM_SWAP_GB" ]; then
+        check "swap=${VM_SWAP_GB}GB: the VM has $VM_SWAP_GB GB of swap" swap_fits
+    fi
+    [ -z "$VM_NETWORKING" ] || check_eq "networkingMode=$VM_NETWORKING is in force" "$VM_NETWORKING" wslinfo --networking-mode
+    [ -z "$VM_DISK_GB" ] || check_eq "the disk of the distribution is limited to $VM_DISK_GB GB" "$VM_DISK_GB" disk_gb
 fi
 
 # ----------------------------------------------------------------------------------------------
@@ -290,35 +347,86 @@ fi
 
 # ----------------------------------------------------------------------------------------------
 if [ "$EXPECT_GASH" -eq 1 ]; then
-    section "Gash and your shell (4.7)"
+    section "Gash (4.7)"
     check "gash is installed and answers" "$GASH" version
-    case "$SHELL_CHOICE" in
-        gash)
-            check "~/.bashrc loads Gash" grep -q '>>> GASH START >>>' "$HOME/.bashrc"
-            check_match "an interactive Bash has the Gash functions" '^function$' bash -c "bash -ic 'type -t gash_doctor' 2>/dev/null"
-            aliases="composer-self-update"
-            for v in $PHP_VERSIONS; do
-                aliases+=" php${v/./} composer${v/./}"
-                case "$v" in 5.6 | 7.0 | 7.1 | 7.2) aliases+=" 1composer${v/./}" ;; esac
-            done
-            # shellcheck disable=SC2016
-            check "an interactive Bash has the PHP aliases ($aliases)" bash -c "bash -ic 'for a in $aliases; do alias \"\$a\" >/dev/null || exit 1; done' 2>/dev/null"
-            ;;
-        zsh)
-            check_eq "the login shell is zsh" "$(command -v zsh)" bash -c "getent passwd '$USER' | cut -d: -f7"
-            check "Oh My Zsh is installed" test -d "$HOME/.oh-my-zsh"
-            check "~/.bashrc does not load Gash" bash -c "! grep -q '>>> GASH START >>>' '$HOME/.bashrc'"
-            check "an interactive zsh finds the gash command" bash -c "zsh -ic 'command -v gash' 2>/dev/null"
-            ;;
-        bash)
-            check "~/.bashrc does not load Gash" bash -c "! grep -q '>>> GASH START >>>' '$HOME/.bashrc'"
-            check_eq "~/.local/bin/gash links the launcher" "$HOME/.gash/bin/gash" readlink "$HOME/.local/bin/gash"
-            ;;
-    esac
+    if [ "$SHELL_CHOICE" = gash ]; then
+        check "~/.bashrc loads Gash" grep -q '>>> GASH START >>>' "$HOME/.bashrc"
+        check_match "an interactive Bash has the Gash functions" '^function$' bash -c "bash -ic 'type -t gash_doctor' 2>/dev/null"
+        aliases="composer-self-update"
+        for v in $PHP_VERSIONS; do
+            aliases+=" php${v/./} composer${v/./}"
+            case "$v" in 5.6 | 7.0 | 7.1 | 7.2) aliases+=" 1composer${v/./}" ;; esac
+        done
+        # shellcheck disable=SC2016
+        check "an interactive Bash has the PHP aliases ($aliases)" bash -c "bash -ic 'for a in $aliases; do alias \"\$a\" >/dev/null || exit 1; done' 2>/dev/null"
+    else
+        check "~/.bashrc does not load Gash" bash -c "! grep -q '>>> GASH START >>>' '$HOME/.bashrc'"
+        check_eq "~/.local/bin/gash links the launcher" "$HOME/.gash/bin/gash" readlink "$HOME/.local/bin/gash"
+    fi
 else
     section "Without Gash"
     check "Gash is not installed (--no-gash)" test ! -e "$HOME/.gash"
 fi
+
+# ----------------------------------------------------------------------------------------------
+section "Your shell: $SHELL_CHOICE (6)"
+login_shell() {
+    getent passwd "$USER" | cut -d: -f7
+}
+# The interactive shells below run without a terminal: their job-control warnings go to stderr.
+case "$SHELL_CHOICE" in
+    gash | bash)
+        check_eq "the login shell is Bash" "$(command -v bash)" login_shell
+        check "~/.bashrc has no lamp-lapp-stack block" bash -c "! grep -q '>>> lamp-lapp-stack >>>' '$HOME/.bashrc'"
+        ;;
+    bash-plus)
+        check_eq "the login shell is Bash" "$(command -v bash)" login_shell
+        check "~/.inputrc includes /etc/inputrc" grep -qx '\$include /etc/inputrc' "$HOME/.inputrc"
+        check "~/.bashrc has the lamp-lapp-stack block" grep -q '>>> lamp-lapp-stack >>>' "$HOME/.bashrc"
+        check "starship is installed" starship --version
+        check_match "an interactive Bash has the fzf key bindings (Ctrl-R)" '__fzf_history__' bash -c "bash -ic 'declare -F __fzf_history__' 2>/dev/null"
+        check_match "an interactive Bash has zoxide (z)" '__zoxide_z' bash -c "bash -ic 'declare -F __zoxide_z' 2>/dev/null"
+        check_match "an interactive Bash uses the starship prompt" 'starship' bash -c "bash -ic 'declare -p PS1 PROMPT_COMMAND' 2>/dev/null"
+        check_match "an interactive Bash keeps 100000 history lines" '^100000$' bash -c "bash -ic 'echo \$HISTSIZE' 2>/dev/null"
+        ;;
+    zsh)
+        check_eq "the login shell is zsh" "$(command -v zsh)" login_shell
+        check "no Oh My Zsh" test ! -e "$HOME/.oh-my-zsh"
+        check "~/.zshrc has the lamp-lapp-stack block" grep -q '>>> lamp-lapp-stack >>>' "$HOME/.zshrc"
+        check "starship is installed" starship --version
+        # shellcheck disable=SC2016
+        check_eq "an interactive zsh loads autosuggestions, syntax highlighting, fzf, zoxide" "1 1 1 1" \
+            bash -c "zsh -ic 'print \${+functions[_zsh_autosuggest_start]} \${+functions[_zsh_highlight]} \${+functions[fzf-history-widget]} \${+functions[__zoxide_z]}' 2>/dev/null"
+        check_match "an interactive zsh uses the starship prompt" 'starship' bash -c "zsh -ic 'print -r -- \$PROMPT' 2>/dev/null"
+        if [ "$EXPECT_GASH" -eq 1 ]; then
+            check "an interactive zsh finds the gash command" bash -c "zsh -ic 'command -v gash' 2>/dev/null"
+        fi
+        if [ "$EXPECT_NODE" -eq 1 ]; then
+            check_match "an interactive zsh has node (nvm)" '^v[0-9]+\.' bash -c "zsh -ic 'node --version' 2>/dev/null"
+        fi
+        ;;
+    fish)
+        check_eq "the login shell stays Bash" "$(command -v bash)" login_shell
+        check "starship is installed" starship --version
+        check "~/.config/fish/conf.d/lamp-lapp-stack.fish is there" test -s "$HOME/.config/fish/conf.d/lamp-lapp-stack.fish"
+        # An interactive Bash that reads commands hands over to fish, which runs the rest of them.
+        check_match "an interactive Bash started by a terminal hands over to fish" '^fish [0-9]' \
+            bash -c "printf '%s\n' 'echo fish \$FISH_VERSION' | bash -i 2>/dev/null"
+        check_eq "bash -c is not handed over" bash bash -ic 'echo bash'
+        check_eq "an interactive fish loads fzf, zoxide and starship" "fzf zoxide starship" \
+            fish -ic 'functions -q fzf-history-widget; and echo -n "fzf "; functions -q __zoxide_z; and echo -n "zoxide "; functions fish_prompt | string match -q "*starship*"; and echo starship'
+        if [ "$EXPECT_GASH" -eq 1 ]; then
+            check "fish finds the gash command" fish -c 'command -v gash'
+        fi
+        if [ "$EXPECT_NODE" -eq 1 ]; then
+            node_lts() {
+                bash -c 'export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh" >/dev/null 2>&1; nvm version lts/*'
+            }
+            check_eq "an interactive fish has the LTS node of nvm" "$(node_lts)" fish -ic 'node --version'
+            check_match "nvm works from fish" '^v[0-9]+\.' fish -c 'nvm use --silent default; and node --version'
+        fi
+        ;;
+esac
 
 # ----------------------------------------------------------------------------------------------
 if [ "$EXPECT_HTE" -eq 1 ]; then

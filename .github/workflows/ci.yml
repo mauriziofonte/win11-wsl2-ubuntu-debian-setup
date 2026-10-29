@@ -67,49 +67,53 @@ jobs:
       - name: Parse in Windows PowerShell 5.1
         shell: powershell
         run: |
-          foreach ($file in @("install/install.ps1", "install/win11.ps1", "tests/wsl/run.ps1")) {
+          foreach ($file in (Get-ChildItem -Path install, tests -Recurse -Filter *.ps1)) {
             $errors = $null
-            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file), [ref]$null, [ref]$errors) | Out-Null
-            if ($errors) { $errors | Format-List; throw "$file does not parse in PowerShell $($PSVersionTable.PSVersion)" }
-            Write-Host "ok - $file parses in PowerShell $($PSVersionTable.PSVersion)"
+            [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$null, [ref]$errors) | Out-Null
+            if ($errors) { $errors | Format-List; throw "$($file.Name) does not parse in PowerShell $($PSVersionTable.PSVersion)" }
+            Write-Host "ok - $($file.Name) parses in PowerShell $($PSVersionTable.PSVersion)"
           }
+      - name: Unit tests of the WSL settings, in Windows PowerShell 5.1
+        shell: powershell
+        run: tests/powershell/unit.ps1
+      - name: Unit tests of the WSL settings, in PowerShell 7
+        shell: pwsh
+        run: tests/powershell/unit.ps1
       - name: win11.ps1 -DryRun -Unattended, in Windows PowerShell 5.1
         shell: pwsh
-        run: |
-          foreach ($distro in @("Debian", "Ubuntu-24.04", "Ubuntu-26.04")) {
-            $out = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File install/win11.ps1 -DryRun -Unattended -Distro $distro -Shell zsh 2>&1) -join "`n"
-            Write-Host $out
-            if ($LASTEXITCODE -ne 0) { throw "dry run for $distro exited with $LASTEXITCODE" }
-            foreach ($want in @("[7/7]", "Distribution: $distro", "--shell zsh", "$distro.lnk")) {
-              if (-not $out.Contains($want)) { throw "dry run for ${distro}: '$want' not in the output" }
-            }
-          }
-          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File install/win11.ps1 -DryRun -Unattended -Distro Fedora | Out-Host
-          if ($LASTEXITCODE -ne 1) { throw "-Distro Fedora: expected exit status 1, got $LASTEXITCODE" }
-          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File install/win11.ps1 -DryRun -Unattended -Shell fish | Out-Host
-          if ($LASTEXITCODE -ne 1) { throw "-Shell fish: expected exit status 1, got $LASTEXITCODE" }
-          # The step would otherwise end with the expected status 1 of the last call.
-          exit 0
+        run: tests/powershell/dry-run.ps1
 
   wsl:
-    name: WSL2 (${{ matrix.distro }})
+    name: WSL2 (${{ matrix.distro }}, ${{ matrix.case }})
     runs-on: windows-2025
     timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        distro: [Debian, Ubuntu-24.04, Ubuntu-26.04]
+        include:
+          # The defaults: Bash with Gash, Balanced profile, NAT, no disk limit.
+          - { distro: Debian, case: defaults, options: "" }
+          # A .wslconfig of your own, kept; a disk limit on an existing distribution; fish.
+          - { distro: Ubuntu-24.04, case: "own .wslconfig, fish", options: "-PresetWslConfig -VmProfile Light -VhdSizeGB 32 -WslInitTimeout 45000 -Shell fish" }
+          # Mirrored networking, no Windows PATH in Linux, Bash with fzf/zoxide/starship.
+          - { distro: Ubuntu-26.04, case: "mirrored, bash-plus", options: "-VmProfile Performance -WslNetworking mirrored -WslAppendWindowsPath false -Shell bash-plus" }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Windows setup end to end on a real WSL2
         shell: pwsh
-        run: tests/wsl/run.ps1 -Distro ${{ matrix.distro }} -LogDir "$env:RUNNER_TEMP/logs"
-      - name: Collect the setup logs
+        env:
+          DISTRO: ${{ matrix.distro }}
+          OPTIONS: ${{ matrix.options }}
+        # The options are this workflow's own matrix values; an array splat would not bind them by name.
+        run: Invoke-Expression "& tests/wsl/run.ps1 -Distro $env:DISTRO -LogDir `"$env:RUNNER_TEMP/logs`" $env:OPTIONS"
+      - name: Collect the setup logs and the .wslconfig
         if: failure()
         shell: pwsh
-        run: Copy-Item -Path "$env:LOCALAPPDATA/WSL2Setup/*.log" -Destination "$env:RUNNER_TEMP/logs" -ErrorAction SilentlyContinue
+        run: |
+          Copy-Item -Path "$env:LOCALAPPDATA/WSL2Setup/*.log" -Destination "$env:RUNNER_TEMP/logs" -ErrorAction SilentlyContinue
+          Copy-Item -Path "$env:USERPROFILE/.wslconfig*" -Destination "$env:RUNNER_TEMP/logs" -ErrorAction SilentlyContinue
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
@@ -125,8 +129,9 @@ jobs:
       matrix:
         include:
           - { image: "debian:13", scenario: minimal }
-          - { image: "ubuntu:24.04", scenario: bash }
+          - { image: "ubuntu:24.04", scenario: bash-plus }
           - { image: "ubuntu:26.04", scenario: zsh }
+          - { image: "debian:13", scenario: fish }
           - { image: "ubuntu:24.04", scenario: manual }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

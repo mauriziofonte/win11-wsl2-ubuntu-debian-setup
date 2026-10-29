@@ -15,10 +15,11 @@
 # as written), then verify-stack.sh with SCOPE=manual.
 #
 # Scenarios (the options they pass):
-#   minimal  --php 8.3 --no-gash --no-node
-#   zsh      --php "8.4 7.4" --shell zsh --hte-ports high --wsl --tmp-size 2G
-#   bash     --php "8.4 5.6" --shell bash --no-node
-#   full     (no options: every PHP version, Gash, gash hte, nvm)
+#   minimal    --php 8.3 --no-gash --no-node
+#   zsh        --php "8.4 7.4" --shell zsh --hte-ports high --wsl --tmp-size 2G --wsl-init-timeout 45000
+#   bash-plus  --php "8.4 5.6" --shell bash-plus --no-node
+#   fish       --php 8.4 --shell fish
+#   full       (no options: every PHP version, Gash, gash hte, nvm)
 #
 # LOG_DIR (default: a new temporary directory) receives the logs of every step.
 #
@@ -41,12 +42,16 @@ case "$scenario" in
         expect=(PHP_VERSIONS=8.3 EXPECT_GASH=0 EXPECT_NODE=0 SHELL_CHOICE=bash)
         ;;
     zsh)
-        options=(--php "8.4 7.4" --shell zsh --hte-ports high --wsl --tmp-size 2G)
-        expect=("PHP_VERSIONS=8.4 7.4" SHELL_CHOICE=zsh HTE_PORTS=high EXPECT_WSL=1 TMP_SIZE=2G)
+        options=(--php "8.4 7.4" --shell zsh --hte-ports high --wsl --tmp-size 2G --wsl-init-timeout 45000)
+        expect=("PHP_VERSIONS=8.4 7.4" SHELL_CHOICE=zsh HTE_PORTS=high EXPECT_WSL=1 TMP_SIZE=2G WSL_INIT_TIMEOUT=45000)
         ;;
-    bash)
-        options=(--php "8.4 5.6" --shell bash --no-node)
-        expect=("PHP_VERSIONS=8.4 5.6" SHELL_CHOICE=bash EXPECT_NODE=0)
+    bash-plus)
+        options=(--php "8.4 5.6" --shell bash-plus --no-node)
+        expect=("PHP_VERSIONS=8.4 5.6" SHELL_CHOICE=bash-plus EXPECT_NODE=0)
+        ;;
+    fish)
+        options=(--php 8.4 --shell fish)
+        expect=(PHP_VERSIONS=8.4 SHELL_CHOICE=fish)
         ;;
     full)
         options=()
@@ -159,7 +164,7 @@ as_dev "$verify install" 2>&1 | tee "$LOG_DIR/3-verify.log"
 step "4. Run the installer again: nothing may change"
 as_dev "$installer" 2>&1 | tee "$LOG_DIR/4-rerun.log"
 # The installer reports each change on a line of its own ("  wrote FILE", "  linked ..."), colored.
-if grep -aP '^(\x1b\[[0-9;]*m)?  (wrote|linked|installed|disabled) ' "$LOG_DIR/4-rerun.log"; then
+if grep -aP '^(\x1b\[[0-9;]*m)?  (wrote|linked|installed|disabled|removed) ' "$LOG_DIR/4-rerun.log"; then
     echo "FAIL: the second run changed the lines above" >&2
     exit 1
 fi
