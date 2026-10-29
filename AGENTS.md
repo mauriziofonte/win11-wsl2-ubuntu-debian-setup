@@ -18,7 +18,7 @@ A guide, in English and Italian, that sets up a LAMP/LAPP development stack on W
 |---|---|
 | `README.md` | Overview, the automated install, its options |
 | `docs/en/SETUP-EN.md`, `docs/it/SETUP-IT.md` | The manual guide, one per language, kept in parity |
-| `docs/tapes/`, `docs/media/` | VHS tapes and the GIFs they record (see `docs/tapes/README.md`) |
+| `docs/tapes/`, `docs/media/` | Tapes (VHS tape language), their recorder, and the GIFs they record (see `docs/tapes/README.md`) |
 | `install/` | The installers (above) |
 | `confs/vscode.json` | VS Code remote settings the guide links |
 | `tests/` | What CI runs: see `tests/README.md` |

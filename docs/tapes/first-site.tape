@@ -1,5 +1,5 @@
 # The guide's "first local site" in the Debian that windows-setup.tape installed, then Windows opens it.
-# Recorded on a Windows runner by .github/workflows/demos.yml, after windows-setup.tape (README.md here).
+# Played on a Windows runner by record.mjs, in .github/workflows/demos.yml, after windows-setup.tape (README.md here).
 Output docs/media/first-site.gif
 
 Set Shell "powershell"

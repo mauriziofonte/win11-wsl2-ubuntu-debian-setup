@@ -1,6 +1,6 @@
 # The Windows setup without questions: invalid options are refused before anything changes, then a
 # dry run with options shows every step and the .wslconfig it would write.
-# Recorded on a Windows runner by .github/workflows/demos.yml, from the repository root (README.md here).
+# Played on a Windows runner by record.mjs, in .github/workflows/demos.yml, from the repository root (README.md here).
 Output docs/media/windows-options.gif
 
 Set Shell "powershell"

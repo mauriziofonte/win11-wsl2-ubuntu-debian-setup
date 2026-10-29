@@ -1,7 +1,7 @@
 # The Windows setup, interactive, on a Windows that has no distribution yet: every step and every
 # question, the Linux user of the new distribution, the sudo password, then the stack installer (hidden
 # while it works) and the summary. It installs Debian and the whole stack: record it on a disposable
-# machine. Recorded on a Windows runner by .github/workflows/demos.yml (README.md here).
+# machine. Played on a Windows runner by record.mjs, in .github/workflows/demos.yml (README.md here).
 Output docs/media/windows-setup.gif
 
 Set Shell "powershell"
