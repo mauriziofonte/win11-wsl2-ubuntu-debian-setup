@@ -74,6 +74,13 @@ jobs:
           git add docs/media/*.gif
           git diff --cached --quiet
           if ($LASTEXITCODE -eq 0) { Write-Host "GIFs unchanged"; exit 0 }
-          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" `
-            commit -m "docs: record the setup GIFs"
-          git push
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "docs: record the setup GIFs"
+          # The branch may have moved on while the tapes were recording: the GIFs go on top of it.
+          for ($try = 1; $try -le 3; $try++) {
+            git pull --rebase origin $env:GITHUB_REF_NAME
+            if ($LASTEXITCODE -eq 0) { git push origin "HEAD:$env:GITHUB_REF_NAME" }
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+          }
+          throw "could not push the GIFs to $env:GITHUB_REF_NAME"
