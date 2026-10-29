@@ -26,7 +26,7 @@ Wait+Screen /invalid options, nothing was changed/
 Wait
 Sleep 5s
 
-Type "Clear-Host; .\win11.ps1 -Unattended -DryRun -Distro Ubuntu-26.04 -VmProfile Light -WslNetworking mirrored -VhdSizeGB 32 -Shell fish"
+Type "Clear-Host; .\win11.ps1 -Unattended -DryRun -Distro Ubuntu-26.04 -VmProfile Light -WslNetworking mirrored -VhdSizeGB 20 -Shell fish"
 Sleep 400ms
 Enter
 Wait+Screen /Setup completed/

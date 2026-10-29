@@ -72,12 +72,12 @@ foreach ($distro in @("Debian", "Ubuntu-24.04", "Ubuntu-26.04")) {
 
 # --- Every option given: they all reach .wslconfig, wsl.conf (through the stack installer) and wsl --install.
 $run = Invoke-DryRun -Options @("-Distro", "Ubuntu-26.04", "-Shell", "fish", "-VmProfile", "Light", "-WslProcessors", "1",
-    "-WslNetworking", "mirrored", "-WslGui", "true", "-VhdSizeGB", "32", "-WslInitTimeout", "45000", "-WslAppendWindowsPath", "false")
+    "-WslNetworking", "mirrored", "-WslGui", "true", "-VhdSizeGB", "20", "-WslInitTimeout", "45000", "-WslAppendWindowsPath", "false")
 Test-Run "every option given" $run -Contains @(
     "Virtual machine: Light", "Processors: 1 from -WslProcessors", "[wsl2] processors: - -> 1", "Networking: mirrored",
     "[wsl2] networkingMode: - -> mirrored", "[wsl2] dnsTunneling: - -> true", "[wsl2] autoProxy: - -> true",
-    "[wsl2] firewall: - -> true", "[wsl2] guiApplications: - -> true", "Disk limit: 32 GB", "[wsl2] defaultVhdSize: - -> 32GB",
-    "wsl --install -d Ubuntu-26.04 --vhd-size 32GB",
+    "[wsl2] firewall: - -> true", "[wsl2] guiApplications: - -> true", "Disk limit: 20 GB", "[wsl2] defaultVhdSize: - -> 20GB",
+    "wsl --install -d Ubuntu-26.04 --vhd-size 20GB",
     "--shell fish --wsl-init-timeout 45000 --wsl-append-windows-path false"
 )
 

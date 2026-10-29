@@ -94,7 +94,7 @@ jobs:
           # The defaults: Bash with Gash, Balanced profile, NAT, no disk limit.
           - { distro: Debian, case: defaults, options: "" }
           # A .wslconfig of your own, kept; a disk limit on an existing distribution; fish.
-          - { distro: Ubuntu-24.04, case: "own .wslconfig, fish", options: "-PresetWslConfig -VmProfile Light -VhdSizeGB 32 -WslInitTimeout 45000 -Shell fish" }
+          - { distro: Ubuntu-24.04, case: "own .wslconfig, fish", options: "-PresetWslConfig -VmProfile Light -VhdSizeGB 20 -WslInitTimeout 45000 -Shell fish" }
           # Mirrored networking, no Windows PATH in Linux, Bash with fzf/zoxide/starship.
           - { distro: Ubuntu-26.04, case: "mirrored, bash-plus", options: "-VmProfile Performance -WslNetworking mirrored -WslAppendWindowsPath false -Shell bash-plus" }
     steps:

@@ -369,18 +369,19 @@ else
 fi
 
 # ----------------------------------------------------------------------------------------------
-section "Your shell: $SHELL_CHOICE (6)"
 login_shell() {
-    getent passwd "$USER" | cut -d: -f7
+    basename "$(readlink -f "$(getent passwd "$USER" | cut -d: -f7)")"
 }
+[ "$SCOPE" = installer ] && section "Your shell: $SHELL_CHOICE (6)"
 # The interactive shells below run without a terminal: their job-control warnings go to stderr.
-case "$SHELL_CHOICE" in
-    gash | bash)
-        check_eq "the login shell is Bash" "$(command -v bash)" login_shell
+case "$SCOPE:$SHELL_CHOICE" in
+    manual:*) ;;
+    *:gash | *:bash)
+        check_eq "the login shell is Bash" bash login_shell
         check "~/.bashrc has no lamp-lapp-stack block" bash -c "! grep -q '>>> lamp-lapp-stack >>>' '$HOME/.bashrc'"
         ;;
-    bash-plus)
-        check_eq "the login shell is Bash" "$(command -v bash)" login_shell
+    *:bash-plus)
+        check_eq "the login shell is Bash" bash login_shell
         check "~/.inputrc includes /etc/inputrc" grep -qx '\$include /etc/inputrc' "$HOME/.inputrc"
         check "~/.bashrc has the lamp-lapp-stack block" grep -q '>>> lamp-lapp-stack >>>' "$HOME/.bashrc"
         check "starship is installed" starship --version
@@ -389,8 +390,8 @@ case "$SHELL_CHOICE" in
         check_match "an interactive Bash uses the starship prompt" 'starship' bash -c "bash -ic 'declare -p PS1 PROMPT_COMMAND' 2>/dev/null"
         check_match "an interactive Bash keeps 100000 history lines" '^100000$' bash -c "bash -ic 'echo \$HISTSIZE' 2>/dev/null"
         ;;
-    zsh)
-        check_eq "the login shell is zsh" "$(command -v zsh)" login_shell
+    *:zsh)
+        check_eq "the login shell is zsh" zsh login_shell
         check "no Oh My Zsh" test ! -e "$HOME/.oh-my-zsh"
         check "~/.zshrc has the lamp-lapp-stack block" grep -q '>>> lamp-lapp-stack >>>' "$HOME/.zshrc"
         check "starship is installed" starship --version
@@ -405,8 +406,8 @@ case "$SHELL_CHOICE" in
             check_match "an interactive zsh has node (nvm)" '^v[0-9]+\.' bash -c "zsh -ic 'node --version' 2>/dev/null"
         fi
         ;;
-    fish)
-        check_eq "the login shell stays Bash" "$(command -v bash)" login_shell
+    *:fish)
+        check_eq "the login shell stays Bash" bash login_shell
         check "starship is installed" starship --version
         check "~/.config/fish/conf.d/lamp-lapp-stack.fish is there" test -s "$HOME/.config/fish/conf.d/lamp-lapp-stack.fish"
         # An interactive Bash that reads commands hands over to fish, which runs the rest of them.
@@ -442,7 +443,7 @@ if [ "$EXPECT_HTE" -eq 1 ]; then
     if [ "$HTE_PORTS" = standard ]; then
         check_match "your user may bind ports 80 and 443 (net.ipv4.ip_unprivileged_port_start = 80)" \
             'net\.ipv4\.ip_unprivileged_port_start *= *80' cat /etc/sysctl.d/50-gash-hte.conf
-        check_eq "the setting is in force" 80 sysctl -n net.ipv4.ip_unprivileged_port_start
+        check_eq "the setting is in force" 80 cat /proc/sys/net/ipv4/ip_unprivileged_port_start
     else
         check "high ports: no port setting" test ! -e /etc/sysctl.d/50-gash-hte.conf
     fi

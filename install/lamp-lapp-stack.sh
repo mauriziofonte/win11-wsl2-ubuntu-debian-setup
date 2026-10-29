@@ -707,9 +707,10 @@ EOF
         lls_echo log "  wrote $file"
     }
 
+    # Makes PATH the login shell, unless the current one is the same program (/bin/bash is /usr/bin/bash).
     lls_login_shell() {
         local want="$1"
-        if [ "$(getent passwd "$USER" | cut -d: -f7)" != "$want" ]; then
+        if [ "$(readlink -f "$(getent passwd "$USER" | cut -d: -f7)")" != "$(readlink -f "$want")" ]; then
             sudo chsh -s "$want" "$USER"
             lls_echo log "  login shell of $USER: $want"
         fi

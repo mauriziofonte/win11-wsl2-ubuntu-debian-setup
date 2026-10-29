@@ -31,7 +31,7 @@ On a Windows runner, for each distribution:
 | Distribution | Options | Covers |
 |---|---|---|
 | Debian 13 | none | The defaults: Bash with Gash, the Balanced profile, NAT, no WSLg, no disk limit, `initTimeout` 30000 |
-| Ubuntu 24.04 | `-PresetWslConfig -VmProfile Light -VhdSizeGB 32 -WslInitTimeout 45000 -Shell fish` | A `.wslconfig` of your own (unattended: only the profile and the disk limit change in it), a disk limit on a distribution that exists already (`wsl --manage --resize`), Fish |
+| Ubuntu 24.04 | `-PresetWslConfig -VmProfile Light -VhdSizeGB 20 -WslInitTimeout 45000 -Shell fish` | A `.wslconfig` of your own (unattended: only the profile and the disk limit change in it), a disk limit on a distribution that exists already (`wsl --manage --resize`), Fish |
 | Ubuntu 26.04 | `-VmProfile Performance -WslNetworking mirrored -WslAppendWindowsPath false -Shell bash-plus` | Mirrored networking (Windows still opens the site), no Windows folders on the Linux `PATH` (and `gash win` still works), Bash with fzf, zoxide and starship |
 
 ## The plain-machine job
