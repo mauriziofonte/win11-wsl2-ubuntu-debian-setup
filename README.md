@@ -79,7 +79,7 @@ A new window opens: confirm the administrator (UAC) prompt, and the setup guides
 | 2. Windows Subsystem for Linux | `wsl --install --no-distribution`. Windows restarts **only if it has to**; the setup then resumes by itself at your next login (a one-shot `RunOnce` entry, removed by Windows) |
 | 3. Updating WSL | `wsl --update`, WSL 2.0 or later required |
 | 4. WSL settings | Writes `%UserProfile%\.wslconfig`. An existing file keeps every line the setup does not set: you see the changes first, and a backup copy is kept. WSL restarts to use them (you are asked if a distribution is running) |
-| 5. Linux distribution | `wsl --install -d <distro>`: you choose your Linux username and password, then type `exit`. A distribution that is already installed is kept as it is (only its disk limit changes, if you set one). If you have other distributions, you are asked before the new one becomes the default |
+| 5. Linux distribution | `wsl --install -d <distro> --web-download` (the image comes from the distribution's site, not the Microsoft Store): you choose your Linux username and password, then type `exit`. A distribution that is already installed is kept as it is (only its disk limit changes, if you set one). If you have other distributions, you are asked before the new one becomes the default |
 | 6. LAMP/LAPP stack | Runs the [stack installer](#the-stack-installer-also-runs-on-its-own) inside the distribution (it asks once for your sudo password), with the shell you chose, then restarts the distribution to apply its WSL settings |
 | 7. Docker Desktop | Optional, default **no** |
 | 8. Desktop shortcuts | A Linux terminal and the Linux home folder |

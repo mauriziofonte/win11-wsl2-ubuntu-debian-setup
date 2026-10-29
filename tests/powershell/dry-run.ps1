@@ -77,7 +77,7 @@ Test-Run "every option given" $run -Contains @(
     "Virtual machine: Light", "Processors: 1 from -WslProcessors", "[wsl2] processors: - -> 1", "Networking: mirrored",
     "[wsl2] networkingMode: - -> mirrored", "[wsl2] dnsTunneling: - -> true", "[wsl2] autoProxy: - -> true",
     "[wsl2] firewall: - -> true", "[wsl2] guiApplications: - -> true", "Disk limit: 20 GB", "[wsl2] defaultVhdSize: - -> 20GB",
-    "wsl --install -d Ubuntu-26.04 --vhd-size 20GB",
+    "wsl --install -d Ubuntu-26.04 --web-download --vhd-size 20GB",
     "--shell fish --wsl-init-timeout 45000 --wsl-append-windows-path false"
 )
 

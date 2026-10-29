@@ -130,6 +130,8 @@ $messages = @{
         "vhd_same" = "The disk of {0} is already limited to {1} GB"
         "vhd_ko" = "Cannot limit the disk of {0} to {1} GB (exit code {2}). Run 'wsl --manage {0} --resize {1}GB' to see the error."
         "vhd_old" = "WSL {0} cannot limit the disk of a distribution (2.5 or later is needed): no limit set"
+        "ask_vhd_shutdown" = "Limiting the disk needs WSL stopped, and these distributions stop: {0}. Stop WSL now?"
+        "vhd_later" = "Disk of {0} not limited: run this setup again when WSL can stop"
         "invalid_options" = "invalid options, nothing was changed"
         "step_wsl" = "Windows Subsystem for Linux"
         "step_update" = "Updating WSL"
@@ -256,6 +258,8 @@ $messages = @{
         "vhd_same" = "Il disco di {0} è già limitato a {1} GB"
         "vhd_ko" = "Impossibile limitare il disco di {0} a {1} GB (codice di uscita {2}). Esegui 'wsl --manage {0} --resize {1}GB' per vedere l'errore."
         "vhd_old" = "WSL {0} non può limitare il disco di una distribuzione (serve la 2.5 o successiva): nessun limite impostato"
+        "ask_vhd_shutdown" = "Per limitare il disco WSL deve fermarsi, e queste distribuzioni si fermano: {0}. Fermare WSL ora?"
+        "vhd_later" = "Disco di {0} non limitato: esegui di nuovo questa installazione quando WSL può fermarsi"
         "invalid_options" = "opzioni non valide, non è stato cambiato nulla"
         "step_wsl" = "Sottosistema Windows per Linux"
         "step_update" = "Aggiornamento di WSL"
@@ -1008,8 +1012,10 @@ if ($VhdSizeGB -gt 0 -and -not $DryRun -and [Version]$wslVersion -lt [Version]"2
     Write-Warn (Msg "vhd_old" @($wslVersion))
     $VhdSizeGB = 0
 }
-$vhdArguments = @()
-if ($VhdSizeGB -gt 0) { $vhdArguments = @("--vhd-size", "$($VhdSizeGB)GB") }
+# --web-download: the image comes from the distribution's own download site, not the Microsoft Store,
+# which is missing or blocked on some Windows editions and company PCs.
+$installArguments = @("--web-download")
+if ($VhdSizeGB -gt 0) { $installArguments += @("--vhd-size", "$($VhdSizeGB)GB") }
 if ($installed -contains $Distro) {
     Write-Ok (Msg "distro_present" @($Distro))
     if ($VhdSizeGB -gt 0) {
@@ -1020,15 +1026,28 @@ if ($installed -contains $Distro) {
             Write-Ok (Msg "vhd_same" @($Distro, $VhdSizeGB))
         }
         else {
-            wsl.exe --terminate $Distro | Out-Null
-            $resizeOutput = (wsl.exe --manage $Distro --resize "$($VhdSizeGB)GB" 2>&1) -join " "
-            if ($LASTEXITCODE -eq 0) { Write-Ok (Msg "vhd_set" @($Distro, $VhdSizeGB)) }
-            else { Write-Warn (Msg "vhd_ko" @($Distro, $VhdSizeGB, $LASTEXITCODE)); Write-Warn $resizeOutput }
+            # The virtual disk stays attached to the WSL virtual machine after "wsl --terminate": only a
+            # stopped WSL lets it go (WSL_E_DISTRO_NOT_STOPPED otherwise).
+            $running = @(Get-RunningDistros | Where-Object { $_ -ne $Distro })
+            if ($running.Count -eq 0 -or (Read-YesNo -Question (Msg "ask_vhd_shutdown" @($running -join ", ")) -Default $true)) {
+                for ($try = 1; $try -le 3; $try++) {
+                    wsl.exe --shutdown | Out-Null
+                    Start-Sleep -Seconds (2 * $try)
+                    $resizeOutput = (wsl.exe --manage $Distro --resize "$($VhdSizeGB)GB" 2>&1) -join " "
+                    $resizeExit = $LASTEXITCODE
+                    if ($resizeExit -eq 0) { break }
+                }
+                if ($resizeExit -eq 0) { Write-Ok (Msg "vhd_set" @($Distro, $VhdSizeGB)) }
+                else { Write-Warn (Msg "vhd_ko" @($Distro, $VhdSizeGB, $resizeExit)); Write-Warn $resizeOutput }
+            }
+            else {
+                Write-Warn (Msg "vhd_later" @($Distro))
+            }
         }
     }
 }
 elseif ($DryRun) {
-    Write-Info ("wsl --install -d $Distro " + ($vhdArguments -join " ")).Trim()
+    Write-Info ("wsl --install -d $Distro " + ($installArguments -join " ")).Trim()
 }
 else {
     if (-not (Test-OnlineDistro -Name $Distro)) { Stop-Setup (Msg "distro_not_online" @($Distro)) }
