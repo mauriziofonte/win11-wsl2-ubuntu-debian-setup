@@ -272,6 +272,8 @@ curl -k https://shop.test/
 
 The last command prints `PHP 8.4.x`. Inside Linux, `gash hte` keeps the names in `/etc/hosts`. Windows has its own hosts file: `gash hte hosts windows` prints the lines to add to `C:\Windows\System32\drivers\etc\hosts`, only for the names Windows cannot resolve yet (so it prints nothing once they are there). Add them as Administrator, or from the Linux terminal with `gash win fix hosts-add 127.0.0.1 shop.test`, which shows the command and asks for the Windows UAC prompt. Then open `https://shop.test/` in your Windows browser: WSL forwards Windows' localhost to Linux, and the browser warns about the self-signed certificate.
 
+![The first local site in Debian, then Windows opens it after one line in its hosts file](/docs/media/first-site.gif)
+
 Useful commands: `gash hte site list`, `gash hte site modify --domain shop.test --php 7.4`, `gash hte site remove --domain shop.test --yes`, `gash hte doctor`. See the [gash hte guide](https://github.com/mauriziofonte/gash/blob/main/docs/hte/README.md).
 
 ## 6. Your shell: Gash, or an alternative

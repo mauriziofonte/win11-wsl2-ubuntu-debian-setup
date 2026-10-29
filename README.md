@@ -73,6 +73,10 @@ A new window opens: confirm the administrator (UAC) prompt, and the setup guides
   ...
 ```
 
+The whole interactive setup on a Windows without distributions, recorded on a GitHub Windows runner by [CI](/docs/tapes/README.md) (the stack installer's own output, many minutes of it, is skipped):
+
+![The interactive Windows setup: the questions, the .wslconfig it writes, the Linux user of the new Debian, the sudo password, the summary](/docs/media/windows-setup.gif)
+
 | Step | What happens |
 |---|---|
 | 1. Checking this computer | Administrator rights, internet, Windows 11 (`-SkipWindowsVersionCheck` for Windows 10 1903+), every option checked. Then the questions: the distribution, your shell, and the [WSL settings](/docs/en/SETUP-EN.md#2-configure-wsl-on-the-windows-side): a resource profile computed from this PC, NAT or mirrored networking (each explained), WSLg, an optional disk limit |
@@ -113,6 +117,8 @@ Every option is checked before anything changes: a wrong value stops the setup w
 ```powershell
 & ([scriptblock]::Create((irm https://wsl.mauriziofonte.it))) -Unattended -VmProfile Light -WslNetworking mirrored -VhdSizeGB 128
 ```
+
+![win11.ps1 -Unattended -DryRun: invalid options refused before anything changes, then a dry run with options](/docs/media/windows-options.gif)
 
 Run directly, `win11.ps1` also takes `-StackScript <path>`: it runs that copy of `lamp-lapp-stack.sh` (one you reviewed) instead of downloading the released one.
 
