@@ -1,0 +1,76 @@
+# Records the GIFs of the guide (docs/tapes/*.tape) with VHS on a Windows runner: a real, interactive
+# run of the Windows setup on a real WSL2. On a pull request that changes a tape it uploads the GIFs as
+# an artifact; started by hand with "commit" checked, it also commits them to the branch it ran on.
+name: Demos
+
+on:
+  pull_request:
+    paths:
+      - "docs/tapes/**"
+      - ".github/workflows/demos.yml"
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: Commit the GIFs to the branch this runs on
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: demos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render:
+    name: Record the GIFs
+    runs-on: windows-2025
+    timeout-minutes: 150
+    permissions:
+      contents: write
+    steps:
+      # Credentials stay only when the job commits the GIFs.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: ${{ github.event_name == 'workflow_dispatch' && inputs.commit }}
+
+      # Installs vhs, ttyd and ffmpeg; no tape is given here.
+      - uses: charmbracelet/vhs-action@f6d7db07a432fcd3b06772628d36a57f96d95dcf # v2.1.1
+
+      - name: Record the tapes, in order
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path docs/media | Out-Null
+          foreach ($tape in @("windows-options", "windows-setup", "first-site")) {
+            Write-Host "== $tape"
+            vhs "docs/tapes/$tape.tape"
+            if ($LASTEXITCODE -ne 0) { throw "vhs docs/tapes/$tape.tape failed with exit status $LASTEXITCODE" }
+          }
+          Get-ChildItem docs/media/*.gif | Format-Table Name, Length
+
+      - name: Collect the setup logs
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP/demo-logs" | Out-Null
+          Copy-Item -Path "$env:LOCALAPPDATA/WSL2Setup/*.log", "$env:USERPROFILE/.wslconfig" -Destination "$env:RUNNER_TEMP/demo-logs" -ErrorAction SilentlyContinue
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: demo-gifs
+          path: |
+            docs/media/*.gif
+            ${{ runner.temp }}/demo-logs
+
+      - name: Commit the GIFs
+        if: github.event_name == 'workflow_dispatch' && inputs.commit
+        shell: pwsh
+        run: |
+          git add docs/media/*.gif
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) { Write-Host "GIFs unchanged"; exit 0 }
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" `
+            commit -m "docs: record the setup GIFs"
+          git push

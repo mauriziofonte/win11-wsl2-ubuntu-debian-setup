@@ -34,7 +34,7 @@ WIN11 = ROOT / "install/win11.ps1"
 BOOT = ROOT / "install/install.ps1"
 VERIFY = ROOT / "tests/verify-stack.sh"
 VSCODE = ROOT / "confs/vscode.json"
-DOCS = [README, GUIDES["en"], GUIDES["it"], ROOT / "tests/README.md"]
+DOCS = [README, GUIDES["en"], GUIDES["it"], ROOT / "tests/README.md", ROOT / "AGENTS.md", ROOT / "docs/tapes/README.md"]
 GASH = Path(os.environ["GASH_REPO"]).resolve() if os.environ.get("GASH_REPO") else None
 THIS_REPO = "https://github.com/mauriziofonte/win11-wsl2-ubuntu-debian-setup"
 GASH_REPO_URL = "https://github.com/mauriziofonte/gash"
@@ -417,6 +417,14 @@ expect_equal("install.ps1 is ASCII without a BOM (it runs through Invoke-Express
 raw = WIN11.read_bytes()
 expect_equal("win11.ps1 has non-ASCII text and the UTF-8 BOM that PowerShell 5.1 needs for it", True,
              raw.startswith(b"\xef\xbb\xbf"))
+messages = {}
+for lang in ("en", "it"):
+    m = re.search(rf'^    "{lang}" = @\{{\n(.*?)^    \}}', read(WIN11), re.S | re.M)
+    messages[lang] = sorted(re.findall(r'^        "(\w+)" = ', m.group(1), re.M)) if m else None
+expect_equal("win11.ps1 has every message in English and in Italian", messages["en"], messages["it"])
+for path in sorted((ROOT / "tests").rglob("*.ps1")):
+    raw = path.read_bytes()
+    expect_equal(f"{path.relative_to(ROOT)} is ASCII (PSScriptAnalyzer wants a BOM otherwise)", True, all(b < 128 for b in raw))
 try:
     data = json.loads(read(VSCODE))
     ok("confs/vscode.json is valid JSON")
