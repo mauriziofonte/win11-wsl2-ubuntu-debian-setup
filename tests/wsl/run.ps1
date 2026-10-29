@@ -9,6 +9,7 @@
 #   2. install/win11.ps1 -Unattended -StackScript install/lamp-lapp-stack.sh and the options above, in Windows
 #      PowerShell 5.1 (the PowerShell that every Windows has); it ends with "wsl --terminate", a restart of the
 #      distro. Then .wslconfig must hold what the options and the profile say, and nothing else may have changed
+#      (where mirrored networking leaves the distribution without DNS, the setup falls back to NAT: that is checked instead)
 #   3. the Desktop shortcuts it created
 #   4. tests/verify-stack.sh install (runs the guide's "first local site"; checks that the virtual machine got
 #      the RAM, processors, swap, network mode and disk limit of .wslconfig)
@@ -120,6 +121,12 @@ $networking = if ($WslNetworking) { $WslNetworking } elseif (-not $PresetWslConf
 $gui = if ($PresetWslConfig) { $null } else { $false }
 $want = @(Get-WslSettings -MemoryGB $expectedProfile.MemoryGB -Processors $expectedProfile.Processors -SwapGB $expectedProfile.SwapGB `
         -Networking $networking -Gui $gui -Base (-not $PresetWslConfig) -VhdSizeGB $VhdSizeGB)
+# Where mirrored networking leaves the distribution without DNS, win11.ps1 switches .wslconfig to NAT and says so.
+if ($networking -eq "mirrored" -and (Select-String -LiteralPath (Join-Path $LogDir "setup-1.log") -SimpleMatch "Mirrored networking does not work on this PC")) {
+    Write-Host "::warning::Mirrored networking left $Distro without DNS on this machine: checking the fallback to NAT instead"
+    $networking = "nat"
+    foreach ($setting in $want) { if ($setting.Key -eq "networkingMode") { $setting.Value = "nat" } }
+}
 $written = [IO.File]::ReadAllText($wslConfigPath)
 Write-Host "--- $wslConfigPath"
 Write-Host $written

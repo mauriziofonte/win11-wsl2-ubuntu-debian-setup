@@ -74,7 +74,7 @@ La RAM utilizzabile è quella che Windows può usare, un po' meno di quella inst
 | NAT (il predefinito di WSL) | Linux ha una sua rete privata dietro Windows. Windows raggiunge i server Linux tramite `localhost`; gli altri computer della tua rete non li vedono | Sviluppi solo su questo PC. È anche il predefinito dell'installazione, e la scelta di `-Unattended` |
 | Mirrored | Linux condivide le interfacce di rete di Windows: `localhost` funziona nei due sensi (Linux raggiunge un server in esecuzione su Windows a `127.0.0.1`), IPv6 funziona, le VPN funzionano meglio, e gli altri computer della tua rete possono raggiungere i server Linux se il firewall di Windows li lascia passare. Una porta già usata da Windows non è utilizzabile in Linux | Fai prove da un telefono o da un altro PC, lavori dietro una VPN, o ti serve IPv6. Richiede Windows 11 22H2 o successivo |
 
-Con la rete mirrored l'installazione scrive anche `dnsTunneling`, `autoProxy` e `firewall` a `true` (i loro valori predefiniti), così il file dice per intero cosa è in vigore.
+Con la rete mirrored l'installazione scrive anche `dnsTunneling`, `autoProxy` e `firewall` a `true` (i loro valori predefiniti), così il file dice per intero cosa è in vigore. La rete mirrored non funziona su ogni PC (alcune VPN, filtri DNS e macchine virtuali lasciano Linux senza DNS): installata la distribuzione, l'installazione controlla che risolva `github.com`, e se con la rete mirrored non ci riesce propone di passare `.wslconfig` a NAT (in modalità unattended passa da sola) e tiene la NAT solo se funziona.
 
 **WSLg.** L'installazione chiede se usi applicazioni Linux con una finestra; se no, `guiApplications=false` risparmia la memoria della distribuzione di sistema di WSLg.
 

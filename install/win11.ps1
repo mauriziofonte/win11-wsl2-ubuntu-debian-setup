@@ -168,6 +168,12 @@ $messages = @{
         "distro_user" = "Linux user: {0}"
         "ask_default" = "Make {0} the default WSL distribution? (now: {1})"
         "default_set" = "{0} is the default WSL distribution"
+        "network_ok" = "{0} reaches the Internet (github.com resolves)"
+        "network_ko" = "{0} cannot resolve github.com, and the stack installer needs the Internet. DNS servers in {0}: {1}"
+        "network_mirrored_ko" = "{0} cannot resolve github.com with mirrored networking"
+        "ask_network_nat" = "Try NAT networking instead? WSL restarts, and every running distribution stops."
+        "network_fallback" = "Mirrored networking does not work on this PC, NAT does: .wslconfig now says networkingMode=nat. To try mirrored again later: -WslNetworking mirrored"
+        "network_fallback_ko" = "NAT does not work either: .wslconfig is back to mirrored networking"
         "ask_stack" = "Install the LAMP/LAPP stack (PHP 5.6-8.5, Apache, MariaDB, PostgreSQL, Redis, Gash) in {0}?"
         "stack_info" = "This takes a while and prints a lot of output. Linux asks once for your sudo password."
         "stack_download_ko" = "Cannot download the stack installer: {0}"
@@ -288,6 +294,12 @@ $messages = @{
         "distro_user" = "Utente Linux: {0}"
         "ask_default" = "Rendere {0} la distribuzione WSL predefinita? (ora: {1})"
         "default_set" = "{0} è la distribuzione WSL predefinita"
+        "network_ok" = "{0} raggiunge Internet (github.com viene risolto)"
+        "network_ko" = "{0} non riesce a risolvere github.com, e l'installer dello stack ha bisogno di Internet. Server DNS in {0}: {1}"
+        "network_mirrored_ko" = "{0} non riesce a risolvere github.com con la rete mirrored"
+        "ask_network_nat" = "Provare invece la rete NAT? WSL si riavvia, e ogni distribuzione in esecuzione si ferma."
+        "network_fallback" = "La rete mirrored non funziona su questo PC, la NAT sì: ora .wslconfig dice networkingMode=nat. Per riprovare la mirrored più avanti: -WslNetworking mirrored"
+        "network_fallback_ko" = "Nemmeno la NAT funziona: .wslconfig torna alla rete mirrored"
         "ask_stack" = "Installare lo stack LAMP/LAPP (PHP 5.6-8.5, Apache, MariaDB, PostgreSQL, Redis, Gash) in {0}?"
         "stack_info" = "Richiede un po' di tempo e produce molto output. Linux chiede una sola volta la password di sudo."
         "stack_download_ko" = "Impossibile scaricare l'installer dello stack: {0}"
@@ -433,6 +445,22 @@ function Test-OnlineDistro {
         if ((($line -replace "`0", "").Trim() -split "\s+")[0] -eq $Name) { return $true }
     }
     return $false
+}
+
+# Whether the distribution resolves a public name: without DNS the stack installer stalls for minutes on each download.
+function Test-DistroNetwork {
+    param ([Parameter(Mandatory = $true)] [String]$Name)
+    wsl.exe -d $Name -u root --exec timeout 20 getent hosts github.com | Out-Null
+    return ($LASTEXITCODE -eq 0)
+}
+
+# Writes .wslconfig with a new network mode and restarts WSL, so that the next start uses it.
+function Set-WslNetworking {
+    param ([String]$Mode)
+    $text = [IO.File]::ReadAllText($wslConfigPath)
+    $settings = @(Get-WslSettings -Networking $Mode -Base $false -VhdSizeGB 0 | Where-Object { $_.Key -eq "networkingMode" })
+    [IO.File]::WriteAllText($wslConfigPath, (Merge-IniText -Text $text -Settings $settings), (New-Object System.Text.UTF8Encoding($false)))
+    wsl.exe --shutdown | Out-Null
 }
 
 function Get-WslVersion {
@@ -1031,6 +1059,33 @@ else {
         if ($others.Count -eq 0 -or (Read-YesNo -Question (Msg "ask_default" @($Distro, $currentDefault)) -Default $false)) {
             wsl.exe --set-default $Distro | Out-Null
             Write-Ok (Msg "default_set" @($Distro))
+        }
+    }
+
+    # Mirrored networking does not work everywhere (some VPNs, DNS filters, virtual machines): NAT is the way out.
+    $online = Test-DistroNetwork -Name $Distro
+    if ($online) {
+        Write-Ok (Msg "network_ok" @($Distro))
+    }
+    else {
+        $inUse = Read-IniValues -Text $(if (Test-Path -LiteralPath $wslConfigPath) { [IO.File]::ReadAllText($wslConfigPath) } else { "" })
+        if ($inUse["wsl2.networkingmode"] -ieq "mirrored") {
+            Write-Warn (Msg "network_mirrored_ko" @($Distro))
+            if (Read-YesNo -Question (Msg "ask_network_nat") -Default $true) {
+                Set-WslNetworking -Mode "nat"
+                $online = Test-DistroNetwork -Name $Distro
+                if ($online) {
+                    Write-Warn (Msg "network_fallback")
+                }
+                else {
+                    Set-WslNetworking -Mode "mirrored"
+                    Write-Warn (Msg "network_fallback_ko")
+                }
+            }
+        }
+        if (-not $online) {
+            $servers = @(wsl.exe -d $Distro -u root --exec sed -n "s/^nameserver //p" /etc/resolv.conf) -join ", "
+            Write-Warn (Msg "network_ko" @($Distro, $servers))
         }
     }
 }

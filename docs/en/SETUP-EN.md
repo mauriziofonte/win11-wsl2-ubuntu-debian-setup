@@ -74,7 +74,7 @@ The usable RAM is what Windows can use, a little less than what is installed. If
 | NAT (the WSL default) | Linux has its own private network behind Windows. Windows reaches the Linux servers through `localhost`; other computers on your network do not see them | You develop on this PC only. It is the default of the setup too, and the choice of `-Unattended` |
 | Mirrored | Linux shares the network interfaces of Windows: `localhost` works in both directions (Linux reaches a server running on Windows at `127.0.0.1`), IPv6 works, VPNs work better, and other computers on your network can reach the Linux servers if the Windows firewall lets them through. A port that Windows already uses cannot be used in Linux | You test from a phone or another PC, work behind a VPN, or need IPv6. It needs Windows 11 22H2 or later |
 
-With mirrored networking the setup also writes `dnsTunneling`, `autoProxy` and `firewall` as `true` (their defaults), so the file says in full what is in force.
+With mirrored networking the setup also writes `dnsTunneling`, `autoProxy` and `firewall` as `true` (their defaults), so the file says in full what is in force. Mirrored networking does not work on every PC (some VPNs, DNS filters and virtual machines leave Linux without DNS): once the distribution is installed, the setup checks that it resolves `github.com`, and if it does not under mirrored networking, it offers to switch `.wslconfig` to NAT (unattended, it switches) and keeps NAT only if that works.
 
 **WSLg.** The setup asks whether you run Linux applications with a window; if not, `guiApplications=false` saves the memory of the WSLg system distribution.
 

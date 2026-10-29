@@ -63,5 +63,5 @@ CI runs on pull requests, on pushes to `main`, every Monday, and by hand (`workf
 
 * `.wslconfig` (Windows, `%UserProfile%`) configures the WSL virtual machine; `/etc/wsl.conf` (inside each distribution) configures that distribution. Changes apply after `wsl --shutdown` (or `wsl --terminate <distro>` for `wsl.conf`).
 * `win11.ps1` merges into an existing `.wslconfig` (`Merge-IniText`): it sets its keys in place and keeps every other line. Unattended, it changes an existing file only for the options given.
-* Mirrored networking needs Windows 11 22H2 (build 22621). `wsl --install --vhd-size` and `wsl --manage --resize` need WSL 2.5.
+* Mirrored networking needs Windows 11 22H2 (build 22621), and can leave Linux without DNS (it did on GitHub's `windows-2025` runners): `win11.ps1` checks DNS inside the distribution and falls back to NAT. `wsl --install --vhd-size` and `wsl --manage --resize` need WSL 2.5.
 * GitHub's `windows-2025` runners run a real WSL2 with systemd: `tests/wsl/run.ps1` and the GIF recordings use that.
