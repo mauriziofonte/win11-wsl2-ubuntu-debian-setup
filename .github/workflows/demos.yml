@@ -41,12 +41,27 @@ jobs:
       # Installs vhs, ttyd and ffmpeg; no tape is given here.
       - uses: charmbracelet/vhs-action@f6d7db07a432fcd3b06772628d36a57f96d95dcf # v2.1.1
 
+      # The latest ttyd crashes at start on recent Windows and leaves vhs waiting forever
+      # (charmbracelet/vhs#437); 1.7.7 works. Its directory goes first on PATH.
+      - name: ttyd 1.7.7
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP "ttyd"
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $exe = Join-Path $dir "ttyd.exe"
+          Invoke-WebRequest -Uri "https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.win32.exe" -OutFile $exe
+          $sum = (Get-FileHash -Algorithm SHA256 -LiteralPath $exe).Hash.ToLower()
+          if ($sum -ne "e33a27501b10b96981335bcba938b1145c7f52551a343e72160f00ab71832b37") { throw "ttyd.exe: unexpected SHA-256 $sum" }
+          Add-Content -LiteralPath $env:GITHUB_PATH -Value $dir
+          & $exe --version
+
       - name: Record the tapes, in order
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path docs/media | Out-Null
           # Minutes each tape may take: a Wait that never matches must not hold the job until its timeout.
           $tapes = [ordered]@{ "windows-options" = 10; "windows-setup" = 75; "first-site" = 15 }
+          Get-Command ttyd -All | Format-Table Source
           foreach ($tape in $tapes.Keys) {
             Write-Host "== $tape"
             $vhs = Start-Process -FilePath vhs -ArgumentList "docs/tapes/$tape.tape" -NoNewWindow -PassThru
