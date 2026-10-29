@@ -10,4 +10,4 @@ The GIFs in [docs/media](../media) are recorded with [VHS](https://github.com/ch
 
 The tapes run in this order, from the repository root, and `windows-setup.tape` installs Debian and the whole stack: run them only on a disposable Windows machine with WSL2, such as a CI runner.
 
-The workflow runs on a pull request that changes a tape, and uploads the GIFs as an artifact. Started by hand (`workflow_dispatch`) with `commit` checked, it also commits them to the branch it ran on.
+The workflow runs when a push to a branch other than `main` changes a tape (or the workflow), and commits the GIFs to that branch: they reach `main` with the pull request. Started by hand (`workflow_dispatch`), it commits them only with `commit` checked. Each run also uploads them as an artifact.

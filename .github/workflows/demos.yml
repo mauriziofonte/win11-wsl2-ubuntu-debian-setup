@@ -1,10 +1,13 @@
 # Records the GIFs of the guide (docs/tapes/*.tape) with VHS on a Windows runner: a real, interactive
-# run of the Windows setup on a real WSL2. On a pull request that changes a tape it uploads the GIFs as
-# an artifact; started by hand with "commit" checked, it also commits them to the branch it ran on.
+# run of the Windows setup on a real WSL2. A push to a branch other than main that changes a tape records
+# them and commits them to that branch, so they reach main with the pull request that changed the tapes.
+# Started by hand, it records them and commits them only with "commit" checked. The GIFs are also
+# uploaded as an artifact.
 name: Demos
 
 on:
-  pull_request:
+  push:
+    branches-ignore: [main]
     paths:
       - "docs/tapes/**"
       - ".github/workflows/demos.yml"
@@ -33,7 +36,7 @@ jobs:
       # Credentials stay only when the job commits the GIFs.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: ${{ github.event_name == 'workflow_dispatch' && inputs.commit }}
+          persist-credentials: ${{ github.event_name == 'push' || inputs.commit }}
 
       # Installs vhs, ttyd and ffmpeg; no tape is given here.
       - uses: charmbracelet/vhs-action@f6d7db07a432fcd3b06772628d36a57f96d95dcf # v2.1.1
@@ -65,7 +68,7 @@ jobs:
             ${{ runner.temp }}/demo-logs
 
       - name: Commit the GIFs
-        if: github.event_name == 'workflow_dispatch' && inputs.commit
+        if: github.event_name == 'push' || inputs.commit
         shell: pwsh
         run: |
           git add docs/media/*.gif
