@@ -50,6 +50,15 @@ if ($VhdSizeGB -gt 0) { $setupOptions += @("-VhdSizeGB", $VhdSizeGB) }
 if ($WslInitTimeout -gt 0) { $setupOptions += @("-WslInitTimeout", $WslInitTimeout) }
 if ($WslAppendWindowsPath) { $setupOptions += @("-WslAppendWindowsPath", $WslAppendWindowsPath) }
 
+# On a failure, the warnings of the setup come last in the job log, where they are easy to find.
+trap {
+    foreach ($log in @(Get-ChildItem -Path (Join-Path $LogDir "setup-*.log") -ErrorAction SilentlyContinue)) {
+        Select-String -LiteralPath $log.FullName -Pattern '\[(WARN|FAIL)\]' |
+            ForEach-Object { Write-Host "$($log.Name): $($_.Line)" -ForegroundColor Yellow }
+    }
+    break
+}
+
 function Write-Step {
     param ([String]$Text)
     Write-Host ""

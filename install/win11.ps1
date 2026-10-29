@@ -663,14 +663,13 @@ function Get-DistroDisk {
     }
 }
 
-# Size in GB of the virtual disk of a running distribution, as Linux sees the block device (0 when unknown).
-function Get-DistroDiskSizeGB {
-    param ([String]$Name)
-    $device = ((wsl.exe -d $Name -u root --exec findmnt -no SOURCE / 2>$null) -join "").Trim()
-    if (-not $device) { return 0 }
-    $bytes = ((wsl.exe -d $Name -u root --exec lsblk -bdno SIZE $device 2>$null) -join "").Trim()
-    if ($bytes -match '^\d+$') { return [Int]([Int64]$bytes / 1GB) }
-    return 0
+# Whether the root file system of a distribution is already limited to this size: a little less than its
+# disk (the ext4 metadata), never more.
+function Test-DistroDiskSize {
+    param ([String]$Name, [Int]$SizeGB)
+    $bytes = "$((wsl.exe -d $Name -u root --exec df -B1 --output=size / 2>$null) | Select-Object -Last 1)".Trim()
+    if ($bytes -notmatch '^\d+$') { return $false }
+    return ([Int64]$bytes -le [Int64]$SizeGB * 1GB -and [Int64]$bytes -ge [Int64]$SizeGB * 1GB * 0.9)
 }
 
 # Space in GB used inside a distribution (0 when unknown). A distribution started only to measure it is
@@ -1017,7 +1016,7 @@ if ($installed -contains $Distro) {
         if ($DryRun) {
             Write-Info "wsl --manage $Distro --resize $($VhdSizeGB)GB"
         }
-        elseif ((Get-DistroDiskSizeGB -Name $Distro) -eq $VhdSizeGB) {
+        elseif (Test-DistroDiskSize -Name $Distro -SizeGB $VhdSizeGB) {
             Write-Ok (Msg "vhd_same" @($Distro, $VhdSizeGB))
         }
         else {

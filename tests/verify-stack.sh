@@ -245,10 +245,13 @@ if [ "$ON_WSL" -eq 1 ] && [ -n "$VM_MEMORY_GB$VM_PROCESSORS$VM_SWAP_GB$VM_NETWOR
         echo "SwapTotal: $kb kB"
         [ "$kb" -gt $((VM_SWAP_GB * 1048576 - 65536)) ] && [ "$kb" -le $((VM_SWAP_GB * 1048576)) ]
     }
-    disk_gb() {
-        local bytes
-        bytes="$(lsblk -bdno SIZE "$(findmnt -no SOURCE /)")"
-        echo $((bytes / 1073741824))
+    # What Linux can use is the size of the root file system: a little less than its disk, for the ext4 metadata.
+    disk_fits() {
+        local device bytes
+        device="$(findmnt -no SOURCE /)"
+        bytes="$(df -B1 --output=size / | tail -1 | tr -d ' ')"
+        echo "disk $device: $(lsblk -bdno SIZE "$device") bytes; file system /: $bytes bytes"
+        [ "$bytes" -le $((VM_DISK_GB * 1073741824)) ] && [ "$bytes" -ge $((VM_DISK_GB * 1073741824 * 9 / 10)) ]
     }
     [ -z "$VM_MEMORY_GB" ] || check "memory=${VM_MEMORY_GB}GB: the VM has $VM_MEMORY_GB GB of RAM" mem_fits
     [ -z "$VM_PROCESSORS" ] || check_eq "processors=$VM_PROCESSORS: the VM has $VM_PROCESSORS processors" "$VM_PROCESSORS" nproc --all
@@ -258,7 +261,7 @@ if [ "$ON_WSL" -eq 1 ] && [ -n "$VM_MEMORY_GB$VM_PROCESSORS$VM_SWAP_GB$VM_NETWOR
         check "swap=${VM_SWAP_GB}GB: the VM has $VM_SWAP_GB GB of swap" swap_fits
     fi
     [ -z "$VM_NETWORKING" ] || check_eq "networkingMode=$VM_NETWORKING is in force" "$VM_NETWORKING" wslinfo --networking-mode
-    [ -z "$VM_DISK_GB" ] || check_eq "the disk of the distribution is limited to $VM_DISK_GB GB" "$VM_DISK_GB" disk_gb
+    [ -z "$VM_DISK_GB" ] || check "the disk of the distribution is limited to $VM_DISK_GB GB" disk_fits
 fi
 
 # ----------------------------------------------------------------------------------------------
