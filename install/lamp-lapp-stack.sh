@@ -4,7 +4,7 @@
 # Ubuntu 26.04 (resolute), on WSL2 or on a plain machine.
 #
 # Installs: PHP 5.6-8.5 (CLI + FPM, packages.sury.org), Apache 2.4, MariaDB 11.8 LTS,
-# PostgreSQL 18 (pgdg), Redis, Composer 2 + 1, Gash (+ `gash hte` for local sites), nvm + Node LTS,
+# PostgreSQL 18 (pgdg), Redis, Composer 2 + 1, Gash (+ `gash localweb` for local sites), nvm + Node LTS,
 # and the interactive shell you choose: Bash with Gash (default), Bash with fzf/zoxide/starship,
 # a minimal Zsh, Fish, or the plain Bash.
 # On WSL it also applies the WSL base tuning: systemd, /etc/wsl.conf, /tmp on tmpfs, TRIM, no tty getty.
@@ -13,7 +13,7 @@
 # so running it again is safe and is the way to resume after a failure.
 #
 # Author: Maurizio Fonte (https://www.mauriziofonte.it)
-# Version: 2.1.0
+# Version: 2.2.0
 # Release Date: 2023-09-04
 # Last Update: 2026-10-29
 # License: MIT License
@@ -24,7 +24,7 @@
 
     set -Eeuo pipefail
 
-    LLS_VERSION="2.1.0"
+    LLS_VERSION="2.2.0"
     LLS_PHP_ALL="5.6 7.0 7.1 7.2 7.3 7.4 8.0 8.1 8.2 8.3 8.4 8.5"
     LLS_PHP_MODS="cli fpm bcmath bz2 curl gd gmp igbinary imagick imap intl mbstring mcrypt memcached msgpack mysql opcache pgsql readline redis soap sqlite3 xml xsl zip"
     LLS_MARIADB_SERIES="11.8"
@@ -42,11 +42,11 @@
     OPT_PHP="$LLS_PHP_ALL"
     OPT_PG="18"
     OPT_GASH=1
-    OPT_HTE=1
+    OPT_LOCALWEB=1
     OPT_NODE=1
     OPT_WSL=auto
     OPT_TMP_SIZE="25%"
-    OPT_HTE_PORTS="standard"
+    OPT_LOCALWEB_PORTS="standard"
     OPT_SHELL=""
     OPT_WSL_INIT_TIMEOUT=""
     OPT_WSL_APPEND_PATH=""
@@ -79,10 +79,14 @@ Usage: lamp-lapp-stack.sh [options]
                          zsh        Zsh with autosuggestions and syntax highlighting (no Oh My Zsh)
                          fish       Fish for the terminal; Bash stays the login shell and runs the scripts
                          bash       the distribution's Bash, unchanged
-                       with every shell but gash, the gash command is still installed, for gash hte
-  --no-gash            do not install Gash (implies --no-hte and --shell bash)
-  --no-hte             install Gash but do not run "gash hte install"
-  --hte-ports P        ports for gash hte: standard (80/443) or high (default: standard)
+                       with every shell but gash, the gash command is still installed, for gash localweb
+  --no-gash            do not install Gash (implies --no-localweb and --shell bash)
+  --no-localweb | --no-hte
+                       install Gash but do not run "gash localweb install"
+                       (--no-hte is its name before 2.2.0)
+  --localweb-ports P | --hte-ports P
+                       ports for gash localweb: standard (80/443) or high (default: standard)
+                       (--hte-ports is its name before 2.2.0)
   --no-node            do not install nvm and Node LTS
   --wsl | --no-wsl     force or skip the WSL base tuning (default: detected)
   --tmp-size SIZE      /tmp tmpfs cap on WSL, a size or a % of RAM (default: $OPT_TMP_SIZE)
@@ -103,13 +107,13 @@ EOF
                 -y | --yes) OPT_YES=1 ;;
                 --php) OPT_PHP="${2-}"; shift ;;
                 --pg) OPT_PG="${2-}"; shift ;;
-                --no-gash) OPT_GASH=0; OPT_HTE=0 ;;
-                --no-hte) OPT_HTE=0 ;;
+                --no-gash) OPT_GASH=0; OPT_LOCALWEB=0 ;;
+                --no-localweb | --no-hte) OPT_LOCALWEB=0 ;;
                 --no-node) OPT_NODE=0 ;;
                 --wsl) OPT_WSL=1 ;;
                 --no-wsl) OPT_WSL=0 ;;
                 --tmp-size) OPT_TMP_SIZE="${2-}"; shift ;;
-                --hte-ports) OPT_HTE_PORTS="${2-}"; shift ;;
+                --localweb-ports | --hte-ports) OPT_LOCALWEB_PORTS="${2-}"; shift ;;
                 --shell) OPT_SHELL="${2-}"; shift ;;
                 --wsl-init-timeout) OPT_WSL_INIT_TIMEOUT="${2-}"; shift ;;
                 --wsl-append-windows-path) OPT_WSL_APPEND_PATH="${2-}"; shift ;;
@@ -129,7 +133,7 @@ EOF
         [ -n "$OPT_PHP" ] || { lls_echo error "--php needs at least one version"; exit 1; }
         [[ "$OPT_PG" =~ ^[0-9]+$ ]] || { lls_echo error "--pg needs a major version number"; exit 1; }
         [[ "$OPT_TMP_SIZE" =~ ^[0-9]+[KMG%]?$ ]] || { lls_echo error "--tmp-size: use e.g. 6G or 25%"; exit 1; }
-        [[ "$OPT_HTE_PORTS" =~ ^(standard|high)$ ]] || { lls_echo error "--hte-ports: standard or high"; exit 1; }
+        [[ "$OPT_LOCALWEB_PORTS" =~ ^(standard|high)$ ]] || { lls_echo error "--localweb-ports: standard or high"; exit 1; }
         if [ -n "$OPT_WSL_INIT_TIMEOUT" ]; then
             [[ "$OPT_WSL_INIT_TIMEOUT" =~ ^[0-9]+$ ]] && [ "$OPT_WSL_INIT_TIMEOUT" -ge 1000 ] && [ "$OPT_WSL_INIT_TIMEOUT" -le 600000 ] ||
                 { lls_echo error "--wsl-init-timeout: milliseconds, from 1000 to 600000"; exit 1; }
@@ -294,7 +298,7 @@ EOF
     # another distro takes the ports this one needs (services fail, PostgreSQL silently moves to 5433).
     lls_check_ports() {
         local ports="3306 5432 6379" port conflicts=""
-        if [ "$OPT_HTE" -eq 1 ] && [ "$OPT_HTE_PORTS" = "standard" ]; then
+        if [ "$OPT_LOCALWEB" -eq 1 ] && [ "$OPT_LOCALWEB_PORTS" = "standard" ]; then
             ports+=" 80 443"
         fi
         for port in $ports; do
@@ -609,7 +613,7 @@ EOF
             lls_echo log "  already installed: update it with \"gash update\""
         fi
         if [ "$OPT_SHELL" != gash ] && [ -x "$HOME/.gash/bin/gash" ]; then
-            # The launcher on PATH, so that "gash hte ..." works from any shell.
+            # The launcher on PATH, so that "gash localweb ..." works from any shell.
             mkdir -p "$HOME/.local/bin"
             if [ "$(readlink "$HOME/.local/bin/gash" 2>/dev/null)" != "$HOME/.gash/bin/gash" ]; then
                 ln -sfn "$HOME/.gash/bin/gash" "$HOME/.local/bin/gash"
@@ -617,27 +621,27 @@ EOF
             fi
         fi
 
-        [ "$OPT_HTE" -eq 1 ] || return 0
+        [ "$OPT_LOCALWEB" -eq 1 ] || return 0
         local gash_bin
         gash_bin="$(command -v gash || true)"
         [ -n "$gash_bin" ] || gash_bin="$HOME/.gash/bin/gash"
         if [ ! -x "$gash_bin" ]; then
-            lls_echo warning "  gash binary not found: open a new shell and run \"gash hte install\""
+            lls_echo warning "  gash binary not found: open a new shell and run \"gash localweb install\""
             return 0
         fi
-        # Local sites run as your user through gash hte, not through the system Apache.
+        # Local sites run as your user through gash localweb, not through the system Apache.
         sudo a2dissite -q 000-default >/dev/null 2>&1 || true
-        "$gash_bin" hte install --yes --ports "$OPT_HTE_PORTS"
+        "$gash_bin" localweb install --yes --ports "$OPT_LOCALWEB_PORTS"
 
-        # gash hte runs its own Apache and PHP-FPM masters: the system ones would only hold memory
-        # (~70 MB per PHP version). On ports 80/443 gash hte stops the system Apache itself; on the
+        # gash localweb runs its own Apache and PHP-FPM masters: the system ones would only hold memory
+        # (~70 MB per PHP version). On ports 80/443 gash localweb stops the system Apache itself; on the
         # high ports it leaves it alone, so the installer does it here.
         local v unit units="apache2"
         for v in $OPT_PHP; do units="$units php$v-fpm"; done
         for unit in $units; do
             if systemctl is-enabled --quiet "$unit.service" 2>/dev/null || systemctl is-active --quiet "$unit.service"; then
                 sudo systemctl disable --now --quiet "$unit.service"
-                lls_echo log "  disabled the system $unit (gash hte runs its own)"
+                lls_echo log "  disabled the system $unit (gash localweb runs its own)"
             fi
         done
     }
@@ -895,8 +899,8 @@ FISH
         lls_echo info "== Done ($LLS_VERSION)"
         lls_echo "MariaDB: sudo mariadb | user \"default\" in ~/.mysql-pass"
         lls_echo "PostgreSQL $OPT_PG: psql | role \"default\" in ~/.pgsql-pass"
-        if [ "$OPT_HTE" -eq 1 ]; then
-            lls_echo "Local sites: gash hte site create --domain example.test --docroot public"
+        if [ "$OPT_LOCALWEB" -eq 1 ]; then
+            lls_echo "Local sites: gash localweb site create --domain example.test --docroot public"
         fi
         case "$OPT_SHELL" in
             gash) lls_echo "Shell: Bash with Gash. Open a new terminal, then run: gash" ;;

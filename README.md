@@ -13,15 +13,15 @@ In a hurry? Skip to the [Automated Install](#automated-install).
 ## Why WSL2, and why native services instead of containers?
 
 1. You keep Windows as your desktop, and you get a real Linux terminal and filesystem through **WSL2**.
-2. The stack runs as **native systemd services** (MariaDB, PostgreSQL, Redis) and as per-user processes for the local sites (`gash hte`). When a client's production runs on a plain VM, a shared hosting or a server where containers are not an option, the development environment should resemble it as much as possible: many PHP versions side by side, switchable per site, on the same Apache and databases.
+2. The stack runs as **native systemd services** (MariaDB, PostgreSQL, Redis) and as per-user processes for the local sites (`gash localweb`). When a client's production runs on a plain VM, a shared hosting or a server where containers are not an option, the development environment should resemble it as much as possible: many PHP versions side by side, switchable per site, on the same Apache and databases.
 3. If you prefer Docker, you can have both: the Windows installer offers to install **Docker Desktop**, which uses the same WSL2 backend.
 
 ## What will the stack be?
 
-> TL;DR: PHP 5.6 to **8.5** (CLI + FPM), Apache 2.4, **MariaDB 11.8 LTS**, **PostgreSQL 18**, Redis, Composer 2 and 1, Gash with `gash hte` for local sites, Node LTS via nvm, a WSL virtual machine sized for your PC, and Bash with Gash as your shell (or Bash with fzf/zoxide/starship, Zsh, Fish, or plain Bash).
+> TL;DR: PHP 5.6 to **8.5** (CLI + FPM), Apache 2.4, **MariaDB 11.8 LTS**, **PostgreSQL 18**, Redis, Composer 2 and 1, Gash with `gash localweb` for local sites, Node LTS via nvm, a WSL virtual machine sized for your PC, and Bash with Gash as your shell (or Bash with fzf/zoxide/starship, Zsh, Fish, or plain Bash).
 
 1. PHP from [packages.sury.org](https://packages.sury.org/php/), on Debian and Ubuntu alike (it is absorbing `ppa:ondrej/php`, which an existing Ubuntu install may keep): every version from 5.6 to 8.5, with the usual extensions (intl, gd, imagick, mysql, pgsql, redis, memcached, xml, zip, ...)
-2. Local sites with **[`gash hte`](https://github.com/mauriziofonte/gash/blob/main/docs/hte/README.md)**: Apache and PHP-FPM run as your user, each site has its own PHP version, HTTPS with a self-signed certificate, HTTP/2, and the names go into `/etc/hosts` automatically
+2. Local sites with **[`gash localweb`](https://github.com/mauriziofonte/gash/blob/main/docs/localweb/README.md)**: Apache and PHP-FPM run as your user, each site has its own PHP version, HTTPS with a self-signed certificate, HTTP/2, and the names go into `/etc/hosts` automatically
 3. **MariaDB 11.8 LTS** (maintained upstream until June 2028; on Debian 13 and Ubuntu 26.04 it is the distribution's own package), tuned for development, with a `default` user for your applications
 4. **PostgreSQL 18** from the official pgdg repository
 5. On WSL: a `.wslconfig` sized for your PC (three profiles to choose from, NAT or mirrored networking, an optional cap on the virtual disk), systemd, `/tmp` on tmpfs, TRIM so that the virtual disk gives space back to Windows, no failing tty units
@@ -51,7 +51,7 @@ A new window opens: confirm the administrator (UAC) prompt, and the setup guides
 ```text
   ================================================================
    WSL2 + LAMP/LAPP development environment
-   Debian 13 / Ubuntu 24.04 / Ubuntu 26.04 on Windows  -  v2.1.0
+   Debian 13 / Ubuntu 24.04 / Ubuntu 26.04 on Windows  -  v2.2.0
   ================================================================
 
   [1/8] Checking this computer
@@ -134,7 +134,7 @@ curl -fsSL https://wsl.mauriziofonte.it/lamp | bash
 
 The Debian image of WSL ships without `curl`: install it first with `sudo apt-get update && sudo apt-get install -y curl` (the Windows setup above does not need it, it downloads the script on the Windows side).
 
-It accepts options after `bash -s --` (`--yes`, `--php "8.4 7.4"`, `--pg 18`, `--shell fish`, `--no-gash`, `--hte-ports high`, ...: see `--help` and [the options table](/docs/en/SETUP-EN.md#4-run-the-stack-installer)). It **converges**: running it again changes only what differs, so after a failure you fix the cause and run it again. On a cloud VM, remember that the stack is configured for **local development**: everything listens on 127.0.0.1 only and nothing is hardened for the internet.
+It accepts options after `bash -s --` (`--yes`, `--php "8.4 7.4"`, `--pg 18`, `--shell fish`, `--no-gash`, `--localweb-ports high`, ...: see `--help` and [the options table](/docs/en/SETUP-EN.md#4-run-the-stack-installer)). It **converges**: running it again changes only what differs, so after a failure you fix the cause and run it again. On a cloud VM, remember that the stack is configured for **local development**: everything listens on 127.0.0.1 only and nothing is hardened for the internet.
 
 > All WSL2 distributions share one network: if another distribution already runs a LAMP stack, stop its services first. The installer detects the conflict and tells you.
 

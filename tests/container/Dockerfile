@@ -4,7 +4,7 @@
 # So does the dpkg filter of the Ubuntu images that drops /usr/share/doc: a real system keeps the fzf
 # key bindings that Ubuntu 24.04 ships there.
 # Units that touch the kernel or devices are masked: the container runs --privileged on the CI VM.
-# systemd-sysctl applies only the low-port key that gash hte installs, so its boot behaviour is real
+# systemd-sysctl applies only the low-port key that gash localweb installs, so its boot behaviour is real
 # without changing the VM's kernel settings.
 ARG BASE=mirror.gcr.io/library/debian:13
 FROM ${BASE}
