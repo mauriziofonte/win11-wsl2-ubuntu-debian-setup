@@ -1,7 +1,7 @@
 ﻿# WSL2 + Debian 13 / Ubuntu 24.04 / Ubuntu 26.04 setup for Windows 11 (and Windows 10 1903+ with -SkipWindowsVersionCheck)
 #
 # Author: Maurizio Fonte (https://www.mauriziofonte.it)
-# Version: 2.1.0
+# Version: 2.2.0
 # Release Date: 2023-09-04
 # Last Update: 2026-10-29
 # License: MIT License
@@ -46,7 +46,7 @@ param (
     [Switch]$Force
 )
 
-$scriptVersion = "2.1.0"
+$scriptVersion = "2.2.0"
 $installHost = "https://wsl.mauriziofonte.it"
 $repoRawBase = "https://raw.githubusercontent.com/mauriziofonte/win11-wsl2-ubuntu-debian-setup/main"
 $registryPath = "HKCU:\Software\WSL2Setup"
@@ -82,14 +82,14 @@ $messages = @{
         "auto_no" = "no (unattended)"
         "step_checks" = "Checking this computer"
         "ask_shell" = "Which shell do you want in the Linux terminal?"
-        "shell_1" = "Bash with Gash         (recommended: helpers, PHP aliases, gash hte)"
+        "shell_1" = "Bash with Gash         (recommended: helpers, PHP aliases, gash localweb)"
         "shell_2" = "Bash with fzf, zoxide and the starship prompt"
         "shell_3" = "Zsh with autosuggestions and syntax highlighting"
         "shell_4" = "Fish in the terminal, Bash for the scripts"
         "shell_5" = "the distribution's Bash, unchanged"
         "ask_shell_choice" = "Your choice [1-5, Enter = 1]"
         "shell_chosen" = "Shell: {0}"
-        "shell_note" = "With every shell the gash command is installed: gash hte serves the local sites."
+        "shell_note" = "With every shell the gash command is installed: gash localweb serves the local sites."
         "step_wslconfig" = "WSL settings (.wslconfig)"
         "host_resources" = "This PC: {0} GB of RAM, {1} logical processors"
         "ask_profile" = "How much of this PC may the WSL virtual machine use?"
@@ -192,8 +192,8 @@ $messages = @{
         "shortcuts_ok" = "Created on the Desktop: '{0}' (terminal) and '{1}' (home folder)"
         "done_title" = "Setup completed"
         "done_open" = "Open a Linux terminal with the '{0}' shortcut, or run:  wsl -d {0}"
-        "done_site" = "First local site:  gash hte site create --domain shop.test --docroot public"
-        "done_hosts" = "Names for the Windows browser:  gash hte hosts windows  (add its lines to the Windows hosts file)"
+        "done_site" = "First local site:  gash localweb site create --domain shop.test --docroot public"
+        "done_hosts" = "Names for the Windows browser:  gash localweb hosts windows  (add its lines to the Windows hosts file)"
         "done_guide" = "Guide: https://github.com/mauriziofonte/win11-wsl2-ubuntu-debian-setup"
         "failed" = "The setup stopped: {0}"
     }
@@ -210,14 +210,14 @@ $messages = @{
         "auto_no" = "no (automatico)"
         "step_checks" = "Controllo del computer"
         "ask_shell" = "Quale shell vuoi nel terminale Linux?"
-        "shell_1" = "Bash con Gash          (consigliata: funzioni, alias PHP, gash hte)"
+        "shell_1" = "Bash con Gash          (consigliata: funzioni, alias PHP, gash localweb)"
         "shell_2" = "Bash con fzf, zoxide e il prompt starship"
         "shell_3" = "Zsh con suggerimenti automatici ed evidenziazione della sintassi"
         "shell_4" = "Fish nel terminale, Bash per gli script"
         "shell_5" = "la Bash della distribuzione, senza modifiche"
         "ask_shell_choice" = "La tua scelta [1-5, Invio = 1]"
         "shell_chosen" = "Shell: {0}"
-        "shell_note" = "Con ogni shell viene installato il comando gash: gash hte serve i siti locali."
+        "shell_note" = "Con ogni shell viene installato il comando gash: gash localweb serve i siti locali."
         "step_wslconfig" = "Impostazioni di WSL (.wslconfig)"
         "host_resources" = "Questo PC: {0} GB di RAM, {1} processori logici"
         "ask_profile" = "Quanta parte di questo PC può usare la macchina virtuale di WSL?"
@@ -320,8 +320,8 @@ $messages = @{
         "shortcuts_ok" = "Creati sul Desktop: '{0}' (terminale) e '{1}' (cartella home)"
         "done_title" = "Installazione completata"
         "done_open" = "Apri un terminale Linux con il collegamento '{0}', oppure esegui:  wsl -d {0}"
-        "done_site" = "Primo sito locale:  gash hte site create --domain shop.test --docroot public"
-        "done_hosts" = "Nomi per il browser di Windows:  gash hte hosts windows  (aggiungi le righe al file hosts di Windows)"
+        "done_site" = "Primo sito locale:  gash localweb site create --domain shop.test --docroot public"
+        "done_hosts" = "Nomi per il browser di Windows:  gash localweb hosts windows  (aggiungi le righe al file hosts di Windows)"
         "done_guide" = "Guida: https://github.com/mauriziofonte/win11-wsl2-ubuntu-debian-setup"
         "failed" = "L'installazione si è fermata: {0}"
     }

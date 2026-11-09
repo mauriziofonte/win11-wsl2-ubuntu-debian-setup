@@ -13,7 +13,7 @@
 #   3. the Desktop shortcuts it created
 #   4. tests/verify-stack.sh install (runs the guide's "first local site"; checks that the virtual machine got
 #      the RAM, processors, swap, network mode and disk limit of .wslconfig)
-#   5. Windows reaches the site: the lines of "gash hte hosts windows" go in the Windows hosts file,
+#   5. Windows reaches the site: the lines of "gash localweb hosts windows" go in the Windows hosts file,
 #      then curl.exe on Windows opens https://shop.test/
 #   6. wsl --terminate, then tests/verify-stack.sh reboot
 #   7. win11.ps1 again: completed steps are skipped, .wslconfig and the stack stay as they are
@@ -182,8 +182,8 @@ Write-Step "4. Verify the stack"
 Invoke-Verify -Phase "install"
 
 Write-Step "5. Windows opens https://shop.test/"
-$lines = @(wsl.exe -d $Distro -u dev --exec /home/dev/.gash/bin/gash hte hosts windows | Where-Object { $_ -match "^\s*\d" })
-if ($lines.Count -eq 0) { throw "gash hte hosts windows printed no hosts line" }
+$lines = @(wsl.exe -d $Distro -u dev --exec /home/dev/.gash/bin/gash localweb hosts windows | Where-Object { $_ -match "^\s*\d" })
+if ($lines.Count -eq 0) { throw "gash localweb hosts windows printed no hosts line" }
 $hostsFile = Join-Path $env:WINDIR "System32\drivers\etc\hosts"
 Add-Content -LiteralPath $hostsFile -Value $lines
 Write-Host "added to the Windows hosts file: $($lines -join ' | ')"

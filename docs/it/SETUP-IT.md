@@ -1,6 +1,6 @@
 # Setup manuale di uno stack LAMP+LAPP su Windows 11 con WSL2, Debian 13 o Ubuntu 24.04/26.04, servizi nativi e VS Code
 
-> Ultimo aggiornamento: _29/10/2026_. Distribuzioni supportate: **Debian 13 (trixie)** (consigliata), **Ubuntu 24.04 (noble)** e **Ubuntu 26.04 (resolute)**.
+> Ultimo aggiornamento: _09/11/2026_. Distribuzioni supportate: **Debian 13 (trixie)** (consigliata), **Ubuntu 24.04 (noble)** e **Ubuntu 26.04 (resolute)**.
 >
 > Verificata dalla CI: gli installer girano su un vero WSL2 e su macchine normali a ogni modifica e ogni settimana, e i risultati vengono confrontati con quanto scritto in questa pagina. Vedi [cosa verifica la CI](/tests/README.md).
 
@@ -25,13 +25,13 @@ Cosa ottieni:
 | PostgreSQL | 18 | [pgdg](https://wiki.postgresql.org/wiki/Apt) |
 | Redis | distribuzione | distribuzione |
 | Composer | 2 e 1 | [getcomposer.org](https://getcomposer.org/download/), con verifica del checksum |
-| Siti locali | `gash hte` | [Gash](https://github.com/mauriziofonte/gash) |
+| Siti locali | `gash localweb` | [Gash](https://github.com/mauriziofonte/gash) |
 | Shell | Bash con Gash (predefinita), Bash con fzf/zoxide/starship, Zsh, Fish, oppure Bash semplice | vedi la [sezione 6](#6-la-tua-shell-gash-o-unalternativa) |
 | Node | LTS tramite nvm | [nvm](https://github.com/nvm-sh/nvm) |
 
 MariaDB 11.8 è una release a lungo termine: il progetto la mantiene fino a giugno 2028. Su Debian 13 e Ubuntu 26.04 è il pacchetto della distribuzione stessa, quindi riceve gli aggiornamenti di sicurezza della distribuzione per tutto il suo periodo di supporto.
 
-I siti locali sono serviti da **`gash hte`**: Apache e un master PHP-FPM per ogni versione di PHP in uso, che girano con **il tuo utente** (nessun processo root), con HTTPS (certificati self-signed ECDSA da 10 anni), HTTP/2 e una versione di PHP per sito. Sostituisce la configurazione di Apache di sistema e lo strumento `hte-cli` delle versioni precedenti di questa guida.
+I siti locali sono serviti da **`gash localweb`**: Apache e un master PHP-FPM per ogni versione di PHP in uso, che girano con **il tuo utente** (nessun processo root), con HTTPS (certificati self-signed ECDSA da 10 anni), HTTP/2 e una versione di PHP per sito. Sostituisce la configurazione di Apache di sistema e lo strumento `hte-cli` delle versioni precedenti di questa guida.
 
 ## 1. Installare WSL
 
@@ -141,9 +141,9 @@ Le opzioni vanno dopo `bash -s --`, per esempio `... | bash -s -- --yes --php "8
 | `--php "X.Y ..."` | Versioni di PHP da installare (predefinito: tutte, dalla 5.6 alla 8.5) |
 | `--pg N` | Versione major di PostgreSQL (predefinito: 18) |
 | `--shell gash\|bash-plus\|zsh\|fish\|bash` | La tua shell interattiva: Bash con Gash (predefinita), Bash con fzf/zoxide/starship, una Zsh minimale, Fish, oppure la Bash della distribuzione così com'è (vedi la [sezione 6](#6-la-tua-shell-gash-o-unalternativa)). Chiesta se non indicata, su un terminale senza `--yes` |
-| `--no-gash` | Non installa Gash (e quindi nemmeno `gash hte`); implica `--shell bash` |
-| `--no-hte` | Installa Gash ma non configura `gash hte` |
-| `--hte-ports standard\|high` | Porte dei siti locali: 80/443 (predefinito) oppure porte alte (8080/8443) |
+| `--no-gash` | Non installa Gash (e quindi nemmeno `gash localweb`); implica `--shell bash` |
+| `--no-localweb` (o `--no-hte`, il suo nome prima della 2.2.0) | Installa Gash ma non configura `gash localweb` |
+| `--localweb-ports standard\|high` (o `--hte-ports`, il suo nome prima della 2.2.0) | Porte dei siti locali: 80/443 (predefinito) oppure porte alte (8080/8443) |
 | `--no-node` | Non installa nvm e Node |
 | `--wsl`, `--no-wsl` | Forza o salta l'ottimizzazione per WSL (predefinito: rilevata in automatico) |
 | `--tmp-size SIZE` | Dimensione massima di `/tmp` su WSL, per esempio `6G` o `25%` (predefinito: `25%`) |
@@ -244,17 +244,17 @@ Gli utenti anonimi e il database `test` vengono rimossi.
 
 `composer` (2.x) e `composer1` (1.x, per i progetti legacy) vengono scaricati in `/usr/local/bin` e verificati con lo SHA-256 pubblicato. Composer 1 non supporta le versioni recenti di PHP (con PHP 8.4 e successivi stampa avvisi di deprecazione): usalo con un PHP vecchio, per esempio `1composer72`, l'alias di Gash per `php7.2 /usr/local/bin/composer1`.
 
-### 4.7 Gash e `gash hte`
+### 4.7 Gash e `gash localweb`
 
-[Gash](https://github.com/mauriziofonte/gash) è un toolkit per Bash: un prompt, funzioni per file, git, database, versioni di PHP, WSL e Windows, e il gestore di siti locali `gash hte`. L'installer esegue l'[installer di Gash](https://github.com/mauriziofonte/gash/blob/main/docs/install.md), che verifica lo SHA-256 del binario di Gash con l'hash fissato dalla sua release, poi:
+[Gash](https://github.com/mauriziofonte/gash) è un toolkit per Bash: un prompt, funzioni per file, git, database, versioni di PHP, WSL e Windows, e il gestore di siti locali `gash localweb`. L'installer esegue l'[installer di Gash](https://github.com/mauriziofonte/gash/blob/main/docs/install.md), che verifica lo SHA-256 del binario di Gash con l'hash fissato dalla sua release, poi:
 
 ```bash
-gash hte install --yes --ports standard
+gash localweb install --yes --ports standard
 ```
 
-Questo comando usa `sudo` una sola volta per: installare un piccolo helper per `/etc/hosts`, permettere al tuo utente di usare le porte 80 e 443 (`net.ipv4.ip_unprivileged_port_start = 80`), fermare e disabilitare l'Apache di sistema, attivare una unit systemd **utente** (`gash-hte.service`) che avvia lo stack al boot. Dato che `gash hte` usa i propri master Apache e PHP-FPM, l'installer poi disabilita i servizi `phpX.Y-fpm` di sistema, e anche l'Apache di sistema se hai scelto le porte alte (lì `gash hte` non lo tocca): occuperebbero solo memoria (circa 70 MB per versione di PHP).
+Questo comando usa `sudo` una sola volta per: installare un piccolo helper per `/etc/hosts`, permettere al tuo utente di usare le porte 80 e 443 (`net.ipv4.ip_unprivileged_port_start = 80`), fermare e disabilitare l'Apache di sistema, attivare una unit systemd **utente** (`gash-localweb.service`) che avvia lo stack al boot. Dato che `gash localweb` usa i propri master Apache e PHP-FPM, l'installer poi disabilita i servizi `phpX.Y-fpm` di sistema, e anche l'Apache di sistema se hai scelto le porte alte (lì `gash localweb` non lo tocca): occuperebbero solo memoria (circa 70 MB per versione di PHP).
 
-Con `--shell gash` (il predefinito) le shell Bash interattive caricano Gash, che definisce anche `php85` ... `php56`, `composer85` ... `composer56`, `1composer72` ... `1composer56` e `composer-self-update`. Con ogni altra `--shell` Gash non tocca la tua shell e viene installato solo il comando `gash` (in `~/.local/bin`), quindi `gash hte` funziona allo stesso modo.
+Con `--shell gash` (il predefinito) le shell Bash interattive caricano Gash, che definisce anche `php85` ... `php56`, `composer85` ... `composer56`, `1composer72` ... `1composer56` e `composer-self-update`. Con ogni altra `--shell` Gash non tocca la tua shell e viene installato solo il comando `gash` (in `~/.local/bin`), quindi `gash localweb` funziona allo stesso modo.
 
 ### 4.8 nvm e Node
 
@@ -266,21 +266,21 @@ nvm viene installato con il suo script ufficiale, poi `nvm install --lts`.
 ```bash
 mkdir -p ~/sites/shop/public && echo '<?php echo "PHP ", PHP_VERSION, PHP_EOL;' > ~/sites/shop/public/index.php
 cd ~/sites/shop
-gash hte site create --domain shop.test --docroot public --php 8.4
+gash localweb site create --domain shop.test --docroot public --php 8.4
 curl -k https://shop.test/
 ```
 
-L'ultimo comando stampa `PHP 8.4.x`. Dentro Linux, `gash hte` gestisce i nomi in `/etc/hosts`. Windows ha un proprio file hosts: `gash hte hosts windows` stampa le righe da aggiungere a `C:\Windows\System32\drivers\etc\hosts`, solo per i nomi che Windows non risolve ancora (quindi non stampa nulla quando ci sono già). Aggiungile come Amministratore, oppure dal terminale Linux con `gash win fix hosts-add 127.0.0.1 shop.test`, che mostra il comando e chiede la conferma UAC di Windows. Poi apri `https://shop.test/` nel browser di Windows: WSL inoltra il localhost di Windows a Linux, e il browser avvisa del certificato self-signed.
+L'ultimo comando stampa `PHP 8.4.x`. Dentro Linux, `gash localweb` gestisce i nomi in `/etc/hosts`. Windows ha un proprio file hosts: `gash localweb hosts windows` stampa le righe da aggiungere a `C:\Windows\System32\drivers\etc\hosts`, solo per i nomi che Windows non risolve ancora (quindi non stampa nulla quando ci sono già). Aggiungile come Amministratore, oppure dal terminale Linux con `gash win fix hosts-add 127.0.0.1 shop.test`, che mostra il comando e chiede la conferma UAC di Windows. Poi apri `https://shop.test/` nel browser di Windows: WSL inoltra il localhost di Windows a Linux, e il browser avvisa del certificato self-signed.
 
 ![Il primo sito locale in Debian, poi Windows lo apre dopo una riga nel suo file hosts](/docs/media/first-site.gif)
 
-Comandi utili: `gash hte site list`, `gash hte site modify --domain shop.test --php 7.4`, `gash hte site remove --domain shop.test --yes`, `gash hte doctor`. Vedi la [guida di gash hte](https://github.com/mauriziofonte/gash/blob/main/docs/hte/README.md).
+Comandi utili: `gash localweb site list`, `gash localweb site modify --domain shop.test --php 7.4`, `gash localweb site remove --domain shop.test --yes`, `gash localweb doctor`. Vedi la [guida di gash localweb](https://github.com/mauriziofonte/gash/blob/main/docs/localweb/README.md).
 
 ## 6. La tua shell: Gash o un'alternativa
 
 L'installer configura **Bash con Gash**, a meno che tu non scelga diversamente con `--shell` (o `-Shell` nell'installazione per Windows). È la scelta consigliata per questo stack, perché Gash nasce attorno agli stessi compiti:
 
-* siti locali in HTTPS con `gash hte` (sezione 5);
+* siti locali in HTTPS con `gash localweb` (sezione 5);
 * un comando per ogni versione di PHP (`php84`, `composer84`, `1composer72`) e `php_detect_version`, che legge la versione richiesta da un progetto in `composer.json` o `.target-php-version`;
 * WSL e Windows dal terminale Linux (sezione 7);
 * un prompt che conosce git e funzioni per dischi, porte, database, Docker e server, ognuna con `--help`;
@@ -297,9 +297,9 @@ Le alternative:
 | Zsh, minimale | `--shell zsh` | Zsh come shell di login, con suggerimenti automatici ed evidenziazione della sintassi, fzf, zoxide e starship, nvm e il comando `gash` | Un blocco in `~/.zshrc`. I plugin sono pacchetti della distribuzione, quindi `apt-get upgrade` li aggiorna |
 | Fish | `--shell fish` | [Fish](https://fishshell.com/) in ogni terminale: suggerimenti ed evidenziazione integrati, fzf, zoxide e starship, il comando `gash`, e un comando `nvm` che esegue nvm tramite Bash | Bash resta la tua shell di login, e una Bash interattiva avviata da un terminale passa la mano a fish. Gli script, `bash -c`, VS Code e `sudo` continuano a usare Bash. Fish non è una shell POSIX: esegui i frammenti Bash con `bash` |
 | Bash semplice | `--shell bash` | La Bash della distribuzione così com'è, con il comando `gash` in `~/.local/bin` | Niente nei file della tua shell |
-| Nessun Gash | `--no-gash` | Nessun comando `gash` | Niente `gash hte`: servi i tuoi siti con l'Apache di sistema (attivato dal suo pacchetto) e modifica tu i suoi virtual host |
+| Nessun Gash | `--no-gash` | Nessun comando `gash` | Niente `gash localweb`: servi i tuoi siti con l'Apache di sistema (attivato dal suo pacchetto) e modifica tu i suoi virtual host |
 
-Con ogni scelta tranne Gash, le funzioni e gli alias di Gash non vengono caricati: usa `php8.4` e `gash run --runtime php:8.4 -- composer install` al posto di `php84` e `composer84`. Il comando `gash`, e con lui `gash hte`, funziona da ogni shell.
+Con ogni scelta tranne Gash, le funzioni e gli alias di Gash non vengono caricati: usa `php8.4` e `gash run --runtime php:8.4 -- composer install` al posto di `php84` e `composer84`. Il comando `gash`, e con lui `gash localweb`, funziona da ogni shell.
 
 Perché niente Oh My Zsh? Carica un framework di centinaia di file a ogni nuovo terminale e si aggiorna da solo da internet, mentre i due plugin che contano nel lavoro di ogni giorno, suggerimenti automatici ed evidenziazione della sintassi, sono pacchettizzati da Debian e Ubuntu e ricevono gli aggiornamenti di sicurezza insieme al resto del sistema. Le versioni precedenti di questa installazione installavano Oh My Zsh: l'installer lascia stare un `~/.oh-my-zsh` esistente. Per tenere solo la configurazione minimale, cancella `~/.oh-my-zsh` e le righe di Oh My Zsh in `~/.zshrc`.
 
@@ -391,8 +391,8 @@ wsl --manage Debian --set-sparse true
 | L'installer dice `Ports already in use by something outside this system` | Un'altra distribuzione usa uno stack sulle stesse porte (condividono un'unica rete): ferma lì i suoi servizi, oppure fermala con `wsl --terminate <nome>`, poi esegui di nuovo l'installer |
 | L'installer dice `systemd is not running yet` | Esegui `wsl --terminate <distro>` da PowerShell, riapri il terminale ed esegui di nuovo l'installer |
 | L'installer si è fermato a metà | Risolvi la causa che indica ed eseguilo di nuovo. Log: `~/.local/state/lamp-lapp-stack/` in Linux, `%LOCALAPPDATA%\WSL2Setup` in Windows |
-| Un sito risponde in Linux ma non nel browser di Windows | Windows non conosce il nome: `gash hte hosts windows`, poi aggiungi le righe al file hosts di Windows (sezione 5). `gash hte doctor` lo controlla |
-| I siti non rispondono dopo `wsl --shutdown` | `gash hte doctor` indica la causa; `gash hte service start` avvia lo stack |
+| Un sito risponde in Linux ma non nel browser di Windows | Windows non conosce il nome: `gash localweb hosts windows`, poi aggiungi le righe al file hosts di Windows (sezione 5). `gash localweb doctor` lo controlla |
+| I siti non rispondono dopo `wsl --shutdown` | `gash localweb doctor` indica la causa; `gash localweb service start` avvia lo stack |
 | `code .`, `explorer.exe` e gli altri programmi Windows non partono dentro `tmux` o `screen` | `eval "$(gash wsl interop --export)"` collega la shell a un socket di interop attivo |
 | I programmi Windows vanno in timeout con `UtilAcceptVsock ... accept4 failed 110` | `wslc` in Bash con Gash, oppure `wsl --shutdown` da PowerShell |
 | Il disco virtuale non si riduce | Controlla `sparseVhd=true` (sezione 2) e che `systemctl status fstrim.timer` lo mostri attivo |

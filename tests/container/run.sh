@@ -16,10 +16,10 @@
 #
 # Scenarios (the options they pass):
 #   minimal    --php 8.3 --no-gash --no-node
-#   zsh        --php "8.4 7.4" --shell zsh --hte-ports high --wsl --tmp-size 2G --wsl-init-timeout 45000
+#   zsh        --php "8.4 7.4" --shell zsh --localweb-ports high --wsl --tmp-size 2G --wsl-init-timeout 45000
 #   bash-plus  --php "8.4 5.6" --shell bash-plus --no-node
 #   fish       --php 8.4 --shell fish
-#   full       (no options: every PHP version, Gash, gash hte, nvm)
+#   full       (no options: every PHP version, Gash, gash localweb, nvm)
 #
 # LOG_DIR (default: a new temporary directory) receives the logs of every step.
 #
@@ -42,8 +42,8 @@ case "$scenario" in
         expect=(PHP_VERSIONS=8.3 EXPECT_GASH=0 EXPECT_NODE=0 SHELL_CHOICE=bash)
         ;;
     zsh)
-        options=(--php "8.4 7.4" --shell zsh --hte-ports high --wsl --tmp-size 2G --wsl-init-timeout 45000)
-        expect=("PHP_VERSIONS=8.4 7.4" SHELL_CHOICE=zsh HTE_PORTS=high EXPECT_WSL=1 TMP_SIZE=2G WSL_INIT_TIMEOUT=45000)
+        options=(--php "8.4 7.4" --shell zsh --localweb-ports high --wsl --tmp-size 2G --wsl-init-timeout 45000)
+        expect=("PHP_VERSIONS=8.4 7.4" SHELL_CHOICE=zsh LOCALWEB_PORTS=high EXPECT_WSL=1 TMP_SIZE=2G WSL_INIT_TIMEOUT=45000)
         ;;
     bash-plus)
         options=(--php "8.4 5.6" --shell bash-plus --no-node)

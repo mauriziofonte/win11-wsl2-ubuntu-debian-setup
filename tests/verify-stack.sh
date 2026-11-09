@@ -13,8 +13,8 @@
 #   PG             PostgreSQL major (default: 18)
 #   SHELL_CHOICE   gash, bash-plus, zsh, fish or bash (default: gash)
 #   EXPECT_GASH    1 or 0 (default: 1)
-#   EXPECT_HTE     1 or 0 (default: EXPECT_GASH)
-#   HTE_PORTS      standard or high (default: standard)
+#   EXPECT_LOCALWEB     1 or 0 (default: EXPECT_GASH)
+#   LOCALWEB_PORTS      standard or high (default: standard)
 #   EXPECT_NODE    1 or 0 (default: 1)
 #   EXPECT_WSL     1 or 0: the WSL tuning was applied (default: 1 on WSL, 0 elsewhere)
 #   TMP_SIZE       the --tmp-size value (default: 25%)
@@ -41,8 +41,8 @@ PHP_VERSIONS="${PHP_VERSIONS:-$PHP_ALL}"
 PG="${PG:-18}"
 SHELL_CHOICE="${SHELL_CHOICE:-gash}"
 EXPECT_GASH="${EXPECT_GASH:-1}"
-EXPECT_HTE="${EXPECT_HTE:-$EXPECT_GASH}"
-HTE_PORTS="${HTE_PORTS:-standard}"
+EXPECT_LOCALWEB="${EXPECT_LOCALWEB:-$EXPECT_GASH}"
+LOCALWEB_PORTS="${LOCALWEB_PORTS:-standard}"
 EXPECT_NODE="${EXPECT_NODE:-1}"
 TMP_SIZE="${TMP_SIZE:-25%}"
 WSL_INIT_TIMEOUT="${WSL_INIT_TIMEOUT:-30000}"
@@ -65,7 +65,7 @@ NEWEST_PHP="$(printf '%s\n' $PHP_VERSIONS | sort -V | tail -1)"
 # shellcheck disable=SC2086
 OLDEST_PHP="$(printf '%s\n' $PHP_VERSIONS | sort -V | head -1)"
 SITE_PORT=""
-[ "$HTE_PORTS" = high ] && SITE_PORT=":8443"
+[ "$LOCALWEB_PORTS" = high ] && SITE_PORT=":8443"
 
 COUNT=0
 FAILED=0
@@ -279,15 +279,15 @@ esac
 # ----------------------------------------------------------------------------------------------
 section "Apache"
 check_match "Apache 2.4 is installed" 'Apache/2\.4\.' sudo /usr/sbin/apache2ctl -v
-if [ "$EXPECT_HTE" -eq 1 ]; then
-    check_match "the system Apache is stopped and disabled, gash hte serves the sites (4.7)" \
+if [ "$EXPECT_LOCALWEB" -eq 1 ]; then
+    check_match "the system Apache is stopped and disabled, gash localweb serves the sites (4.7)" \
         '^(disabled|masked) (inactive|failed)' unit_state apache2.service
     for v in $PHP_VERSIONS; do
         check_match "the system php$v-fpm is stopped and disabled (4.7)" \
             '^(disabled|masked) (inactive|failed)' unit_state "php$v-fpm.service"
     done
 else
-    check_eq "without gash hte the system Apache keeps running" "enabled active" unit_state apache2.service
+    check_eq "without gash localweb the system Apache keeps running" "enabled active" unit_state apache2.service
 fi
 
 # ----------------------------------------------------------------------------------------------
@@ -433,26 +433,26 @@ case "$SCOPE:$SHELL_CHOICE" in
 esac
 
 # ----------------------------------------------------------------------------------------------
-if [ "$EXPECT_HTE" -eq 1 ]; then
-    section "gash hte (4.7, 5)"
+if [ "$EXPECT_LOCALWEB" -eq 1 ]; then
+    section "gash localweb (4.7, 5)"
     check_eq "linger is on, so the stack starts at boot" Linger=yes loginctl show-user "$USER" -p Linger
     user_unit_state() {
-        XDG_RUNTIME_DIR="/run/user/$(id -u)" unit_state_user gash-hte.service
+        XDG_RUNTIME_DIR="/run/user/$(id -u)" unit_state_user gash-localweb.service
     }
     unit_state_user() {
         printf '%s %s' "$(systemctl --user is-enabled "$1" 2>/dev/null)" "$(systemctl --user is-active "$1" 2>/dev/null)"
     }
-    check_eq "the systemd user unit gash-hte.service is enabled and active" "enabled active" user_unit_state
-    if [ "$HTE_PORTS" = standard ]; then
+    check_eq "the systemd user unit gash-localweb.service is enabled and active" "enabled active" user_unit_state
+    if [ "$LOCALWEB_PORTS" = standard ]; then
         check_match "your user may bind ports 80 and 443 (net.ipv4.ip_unprivileged_port_start = 80)" \
-            'net\.ipv4\.ip_unprivileged_port_start *= *80' cat /etc/sysctl.d/50-gash-hte.conf
+            'net\.ipv4\.ip_unprivileged_port_start *= *80' cat /etc/sysctl.d/50-gash-localweb.conf
         check_eq "the setting is in force" 80 cat /proc/sys/net/ipv4/ip_unprivileged_port_start
     else
-        check "high ports: no port setting" test ! -e /etc/sysctl.d/50-gash-hte.conf
+        check "high ports: no port setting" test ! -e /etc/sysctl.d/50-gash-localweb.conf
     fi
 
     if [ "$PHASE" = install ]; then
-        if [ "$HTE_PORTS" = standard ]; then
+        if [ "$LOCALWEB_PORTS" = standard ]; then
             block="$(doc_block "$GUIDE" first-site)"
             check "the guide has the \"first local site\" commands" test -n "$block"
             # In your terminal "gash" is a shell function; here the launcher stands in for it.
@@ -460,13 +460,13 @@ if [ "$EXPECT_HTE" -eq 1 ]; then
                 env PATH="$HOME/.gash/bin:$PATH" bash -euo pipefail -c "cd ~ && $block"
         else
             check "a site on the high ports" bash -euo pipefail -c \
-                "mkdir -p ~/sites/shop/public && echo '<?php echo \"PHP \", PHP_VERSION, PHP_EOL;' > ~/sites/shop/public/index.php && cd ~/sites/shop && '$GASH' hte site create --domain shop.test --docroot public --php 8.4"
+                "mkdir -p ~/sites/shop/public && echo '<?php echo \"PHP \", PHP_VERSION, PHP_EOL;' > ~/sites/shop/public/index.php && cd ~/sites/shop && '$GASH' localweb site create --domain shop.test --docroot public --php 8.4"
         fi
     fi
     check_match "https://shop.test$SITE_PORT/ answers with PHP 8.4" '^PHP 8\.4\.' site_body
     check_eq "the site speaks HTTP/2" 2 curl -ks --max-time 20 -o /dev/null -w '%{http_version}' "https://shop.test$SITE_PORT/"
-    check_match "/etc/hosts names shop.test in the gash hte block" '^127\.0\.0\.1[[:space:]].*shop\.test' \
-        sed -n '/# >>> gash hte >>>/,/# <<< gash hte <<</p' /etc/hosts
+    check_match "/etc/hosts names shop.test in the gash localweb block" '^127\.0\.0\.1[[:space:]].*shop\.test' \
+        sed -n '/# >>> gash localweb >>>/,/# <<< gash localweb <<</p' /etc/hosts
     cert="$(echo | openssl s_client -connect "127.0.0.1${SITE_PORT:-:443}" -servername shop.test 2>/dev/null | openssl x509 -noout -text -dates 2>/dev/null)"
     check_match "the certificate is self-signed ECDSA" 'id-ecPublicKey' echo "$cert"
     days() {
@@ -485,26 +485,26 @@ if [ "$EXPECT_HTE" -eq 1 ]; then
     }
     check_eq "Apache runs as your user" "$USER" owner
     check "no PHP-FPM master runs as root" bash -c '! pgrep -u root -f "php-fpm: master" >/dev/null'
-    check_match "gash hte site list shows the site" 'shop\.test' "$GASH" hte site list
+    check_match "gash localweb site list shows the site" 'shop\.test' "$GASH" localweb site list
     if [ "$PHASE" = install ]; then
         case " $PHP_VERSIONS " in
             *" 7.4 "*)
-                check "gash hte site modify --php 7.4 (5)" "$GASH" hte site modify --domain shop.test --php 7.4
+                check "gash localweb site modify --php 7.4 (5)" "$GASH" localweb site modify --domain shop.test --php 7.4
                 check_match "the site now runs PHP 7.4" '^PHP 7\.4\.' site_body
-                check "back to PHP 8.4" "$GASH" hte site modify --domain shop.test --php 8.4
+                check "back to PHP 8.4" "$GASH" localweb site modify --domain shop.test --php 8.4
                 ;;
         esac
     fi
-    check "gash hte doctor reports no failure" "$GASH" hte doctor
+    check "gash localweb doctor reports no failure" "$GASH" localweb doctor
 
     if [ "$ON_WSL" -eq 1 ]; then
         section "Gash on WSL (5, 7)"
         if [ "$PHASE" = install ]; then
-            check_match "gash hte hosts windows prints the line for shop.test" 'shop\.test' "$GASH" hte hosts windows
+            check_match "gash localweb hosts windows prints the line for shop.test" 'shop\.test' "$GASH" localweb hosts windows
         else
             # The test added that line to the Windows hosts file: only the names Windows cannot resolve are printed.
-            check "gash hte hosts windows has nothing left to add for shop.test" \
-                bash -c 'out="$("$1" hte hosts windows)" || exit 1; printf "%s\n" "$out"; ! grep -q "shop\.test" <<<"$out"' _ "$GASH"
+            check "gash localweb hosts windows has nothing left to add for shop.test" \
+                bash -c 'out="$("$1" localweb hosts windows)" || exit 1; printf "%s\n" "$out"; ! grep -q "shop\.test" <<<"$out"' _ "$GASH"
         fi
         check "gash wsl info" "$GASH" wsl info
         check "gash win info reads Windows through interop" "$GASH" win info

@@ -31,7 +31,7 @@ Wait /\$ *$/
 Type "cd ~/sites/shop"
 Enter
 Wait /\$ *$/
-Type "gash hte site create --domain shop.test --docroot public --php 8.4"
+Type "gash localweb site create --domain shop.test --docroot public --php 8.4"
 Sleep 300ms
 Enter
 Wait /\$ *$/
@@ -41,7 +41,7 @@ Sleep 300ms
 Enter
 Wait /\$ *$/
 Sleep 2.5s
-Type "gash hte hosts windows"
+Type "gash localweb hosts windows"
 Sleep 300ms
 Enter
 Wait /\$ *$/
